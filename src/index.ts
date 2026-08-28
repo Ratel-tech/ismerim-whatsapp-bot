@@ -1,11 +1,13 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
 import { Store } from './store.js';
 import { WhatsAppClient } from './whatsapp.js';
 import { Agent } from './agent.js';
 import { createHttpServer } from './http.js';
+import { loadCatalog } from './catalog.js';
+import { formatConfirmation, validateAndCreateBooking } from './bookings.js';
+import { buildNotification } from './notifier.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.sessionDir, { recursive: true });
@@ -15,6 +17,32 @@ const whatsapp = new WhatsAppClient();
 const agent = new Agent({
   store,
   sendText: (jid, text) => whatsapp.sendText(jid, text),
+  onBookingConfirmed: async (input) => {
+    const outcome = validateAndCreateBooking(store, loadCatalog(), {
+      ...input,
+      serviceName: input.service,
+    });
+    if (!outcome.ok) {
+      log('warn', `Agendamento rejeitado (${outcome.code}): ${input.service} ${input.date} ${input.time}`);
+      return outcome.userMessage;
+    }
+    const booking = outcome.booking;
+    log('info', `Agendamento criado #${booking.id}: ${booking.clientName} | ${booking.service} | ${booking.date} ${booking.time}`);
+
+    if (config.adminPhone) {
+      const sent = await whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, buildNotification(booking));
+      if (sent) {
+        store.markNotified(booking.id);
+        log('info', `Notificação enviada para o administrador (${config.adminPhone}).`);
+      } else {
+        log('warn', 'WhatsApp desconectado; notificação ao administrador pendente.');
+      }
+    } else {
+      log('warn', 'ADMIN_PHONE não configurado no .env — notificação não enviada.');
+    }
+
+    return formatConfirmation(booking);
+  },
 });
 
 whatsapp.onMessage = (msg) => {

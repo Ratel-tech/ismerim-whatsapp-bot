@@ -1,4 +1,4 @@
-import { AiError, complete, parseAgentResponse } from './ai.js';
+import { AiError, complete, parseAgentResponse, type ChatMessage } from './ai.js';
 import { loadCatalog, resolveService } from './catalog.js';
 import { buildSystemPrompt } from './prompt.js';
 import { Store, type PendingBooking } from './store.js';
@@ -18,6 +18,8 @@ export interface BookingInput {
 export interface AgentOptions {
   store: Store;
   sendText(jid: string, text: string): Promise<boolean>;
+  /** Injetável para testes; padrão: chamada real ao DeepSeek. */
+  complete?(messages: ChatMessage[], opts?: { json?: boolean; temperature?: number }): Promise<string>;
   /**
    * Fase 2: valida, salva e notifica o agendamento confirmado.
    * Deve retornar a mensagem final enviada ao cliente.
@@ -77,11 +79,12 @@ export class Agent {
 
     let parsed: ReturnType<typeof parseAgentResponse> | null = null;
     let noKey = false;
+    const call = this.opts.complete ?? complete;
     try {
-      parsed = parseAgentResponse(await complete(messages, { json: true, temperature: 0.7 }));
+      parsed = parseAgentResponse(await call(messages, { json: true, temperature: 0.7 }));
       if (!parsed.ok) {
         log('warn', `Falha de parsing (1ª tentativa): ${parsed.reason}`);
-        parsed = parseAgentResponse(await complete(messages, { json: true, temperature: 0.2 }));
+        parsed = parseAgentResponse(await call(messages, { json: true, temperature: 0.2 }));
       }
     } catch (err) {
       noKey = err instanceof AiError && err.kind === 'no_api_key';

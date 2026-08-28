@@ -1,5 +1,8 @@
 import { Store } from '../src/store.js';
 import { Agent } from '../src/agent.js';
+import { loadCatalog } from '../src/catalog.js';
+import { formatConfirmation, validateAndCreateBooking } from '../src/bookings.js';
+import { buildNotification } from '../src/notifier.js';
 
 const store = new Store('data/db.json');
 const sent: string[] = [];
@@ -11,13 +14,43 @@ const agent = new Agent({
     console.log(text);
     return true;
   },
+  // mesmo fluxo do index.ts (valida -> salva -> notifica), sem enviar no WhatsApp
+  onBookingConfirmed: async (input) => {
+    const outcome = validateAndCreateBooking(store, loadCatalog(), {
+      ...input,
+      serviceName: input.service,
+    });
+    if (!outcome.ok) {
+      console.log('REJEITADO:', outcome.code);
+      return outcome.userMessage;
+    }
+    console.log('--- AGENDAMENTO CRIADO (db.json) ---');
+    console.log(JSON.stringify(outcome.booking, null, 2));
+    console.log('--- NOTIFICAÇÃO PARA O ADMIN (ADMIN_PHONE) ---');
+    console.log(buildNotification(outcome.booking));
+    return formatConfirmation(outcome.booking);
+  },
 });
 
 const JID = '5511888888888@s.whatsapp.net';
-const msg = process.argv[2] ?? 'Oi! Quanto custa o corte e a barba? E até que horas vocês funcionam?';
-console.log('=== SIMULANDO CLIENTE ===');
-console.log('Cliente:', msg);
+
+const turn = async (msg: string) => {
+  console.log();
+  console.log('=== CLIENTE ===');
+  console.log(msg);
+  await agent.handleInboundMessage({ jid: JID, text: msg, name: 'Cliente Teste' });
+  await new Promise((r) => setTimeout(r, 2500)); // respeita o anti-spam de 2s
+};
+
+const arg1 = process.argv[2];
+if (arg1) {
+  await turn(arg1);
+} else {
+  await turn('Oi! Quero agendar um corte de cabelo. Pode ser na quinta-feira às 16:00? Meu nome é João');
+  await turn('Confirmo, pode marcar!');
+}
+
 console.log();
-await agent.handleInboundMessage({ jid: JID, text: msg, name: 'Cliente Teste' });
-console.log();
+console.log('Agendamentos salvos em db.json:', store.listBookings().length);
 console.log('Mensagens na conversa:', store.getMessages(JID).length);
+
