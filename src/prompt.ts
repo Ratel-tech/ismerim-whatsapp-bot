@@ -1,4 +1,5 @@
 import { formatHorarios, formatPreco, type Catalog } from './catalog.js';
+import type { AgentConfig } from './agent-config.js';
 
 export interface PromptOptions {
   clientName: string | null;
@@ -6,7 +7,7 @@ export interface PromptOptions {
   now?: Date;
 }
 
-export function buildSystemPrompt(catalog: Catalog, opts: PromptOptions): string {
+export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts: PromptOptions): string {
   const now = opts.now ?? new Date();
   const today = now.toLocaleDateString('pt-BR');
 
@@ -22,7 +23,19 @@ export function buildSystemPrompt(catalog: Catalog, opts: PromptOptions): string
     ? `\n\nAGENDAMENTO EM ANDAMENTO — o cliente precisa apenas confirmar ou corrigir: ${opts.pendingBooking}`
     : '';
 
-  return `Você é o assistente virtual da Ismerim Barbearia no WhatsApp. Atue como UM VENDEDOR: entenda a necessidade do cliente, faça perguntas, apresente serviços relevantes, use chamadas para ação (ex.: "quer que eu reserve seu horário?") e conduza até a confirmação do agendamento.
+  return `Você é o assistente virtual da ${agentCfg.empresa || 'barbearia'} no WhatsApp. Atue como UM VENDEDOR: entenda a necessidade do cliente, faça perguntas, apresente serviços relevantes, use chamadas para ação (ex.: "quer que eu reserve seu horário?") e conduza até a confirmação do agendamento.
+
+## Empresa
+${agentCfg.empresa || '(configure a empresa na aba "Agente" da página)'}
+
+## Personalidade
+${agentCfg.personalidade || 'Simpático, atencioso e profissional.'}
+
+## Instruções
+${agentCfg.instrucoes || 'Responda em português do Brasil, de forma curta e amigável.'}
+
+## Mensagem de boas-vindas (use como abertura quando for o primeiro contato)
+${agentCfg.boas_vindas || '(sem boas-vindas definidas)'}
 
 ## REGRAS DE OURO (nunca viole)
 1. NUNCA invente promoções, preços, descontos, serviços, produtos ou horários.

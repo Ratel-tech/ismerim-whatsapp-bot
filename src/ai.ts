@@ -34,7 +34,7 @@ export async function complete(messages: ChatMessage[], opts: { json?: boolean; 
         model: config.deepseekModel,
         messages,
         temperature: opts.temperature ?? 0.7,
-        max_tokens: 800,
+        max_tokens: 1500,
         stream: false,
         ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
       }),

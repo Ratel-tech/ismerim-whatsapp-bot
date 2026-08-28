@@ -1,5 +1,6 @@
 import { AiError, complete, parseAgentResponse, type ChatMessage } from './ai.js';
 import { loadCatalog, resolveService } from './catalog.js';
+import { loadAgentConfig } from './agent-config.js';
 import { buildSystemPrompt } from './prompt.js';
 import { Store, type PendingBooking } from './store.js';
 import { log } from './log.js';
@@ -60,8 +61,9 @@ export class Agent {
 
   private async runTurn(jid: string, clientName: string | null, text: string): Promise<void> {
     const catalog = loadCatalog();
+    const agentCfg = loadAgentConfig();
     const pending = this.opts.store.getPendingBooking(jid);
-    const system = buildSystemPrompt(catalog, {
+    const system = buildSystemPrompt(catalog, agentCfg, {
       clientName,
       pendingBooking: pending ? JSON.stringify(pending) : null,
     });
@@ -84,7 +86,16 @@ export class Agent {
       parsed = parseAgentResponse(await call(messages, { json: true, temperature: 0.7 }));
       if (!parsed.ok) {
         log('warn', `Falha de parsing (1ª tentativa): ${parsed.reason}`);
-        parsed = parseAgentResponse(await call(messages, { json: true, temperature: 0.2 }));
+        // retry com lembrete explícito do contrato JSON
+        parsed = parseAgentResponse(
+          await call(
+            [
+              ...messages,
+              { role: 'user', content: 'ATENÇÃO: responda APENAS com o objeto JSON no formato especificado, sem texto fora dele.' },
+            ],
+            { json: true, temperature: 0.3 },
+          ),
+        );
       }
     } catch (err) {
       noKey = err instanceof AiError && err.kind === 'no_api_key';
@@ -101,7 +112,7 @@ export class Agent {
     let reply = data.reply;
 
     if (data.intent === 'transferir') {
-      reply = 'Sem problemas! Vou encaminhar você para o nosso atendente humano. Um momento, por favor. 🙌';
+      reply = agentCfg.transferencia || 'Sem problemas! Vou encaminhar você para o nosso atendente humano. Um momento, por favor. 🙌';
     } else if (data.booking.requested) {
       const b = data.booking;
       const draft: PendingBooking = { service: b.service, date: b.date, time: b.time, client_name: b.client_name };

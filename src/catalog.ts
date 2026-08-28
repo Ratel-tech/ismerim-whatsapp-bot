@@ -32,6 +32,11 @@ export function loadCatalog(file: string = config.catalogFile): Catalog {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Catalog;
 }
 
+export function saveCatalog(catalog: Catalog, file: string = config.catalogFile): void {
+  fs.mkdirSync(file.substring(0, file.lastIndexOf('\\')), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(catalog, null, 2));
+}
+
 export function normalizeName(name: string): string {
   return name
     .toLowerCase()

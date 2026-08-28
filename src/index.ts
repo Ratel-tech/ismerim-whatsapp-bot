@@ -1,11 +1,12 @@
 import fs from 'node:fs';
-import { config } from './config.js';
+import { config, updateEnv } from './config.js';
 import { log } from './log.js';
 import { Store } from './store.js';
 import { WhatsAppClient } from './whatsapp.js';
 import { Agent } from './agent.js';
 import { createHttpServer } from './http.js';
-import { loadCatalog } from './catalog.js';
+import { loadCatalog, saveCatalog } from './catalog.js';
+import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { formatConfirmation, validateAndCreateBooking } from './bookings.js';
 import { buildNotification } from './notifier.js';
 
@@ -62,6 +63,12 @@ const server = createHttpServer({
   }),
   onReconnect: () => whatsapp.resetSession(),
   onPairingCode: (phone) => whatsapp.requestPairingCode(phone),
+  getAgentConfig: () => loadAgentConfig(),
+  saveAgentConfig: (cfg) => saveAgentConfig(cfg),
+  getCatalog: () => loadCatalog(),
+  saveCatalog: (catalog) => saveCatalog(catalog),
+  getAdminPhone: () => config.adminPhone,
+  saveAdminPhone: (phone) => updateEnv('ADMIN_PHONE', phone),
 });
 
 server.listen(config.port, '127.0.0.1', () => {
