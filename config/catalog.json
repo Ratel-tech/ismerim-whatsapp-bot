@@ -1,0 +1,27 @@
+{
+  "horarios": {
+    "1": [{ "open": "09:00", "close": "19:00" }],
+    "2": [{ "open": "09:00", "close": "19:00" }],
+    "3": [{ "open": "09:00", "close": "19:00" }],
+    "4": [{ "open": "09:00", "close": "19:00" }],
+    "5": [{ "open": "09:00", "close": "19:00" }],
+    "6": [{ "open": "09:00", "close": "19:00" }]
+  },
+  "servicos": [
+    { "nome": "Corte", "preco": 40, "descricao": "Corte de cabelo com tesoura e máquina, finalização com produtos" },
+    { "nome": "Barba", "preco": 30, "descricao": "Barba modelada com toalha quente e navalha" },
+    { "nome": "Corte + Barba", "preco": 65, "descricao": "Combo completo de corte e barba" },
+    { "nome": "Sobrancelha", "preco": 15, "descricao": "Desenho de sobrancelha com cera ou pinça" },
+    { "nome": "Pezinho", "preco": 10, "descricao": "Acabamento de cabelo na nuca e laterais" },
+    { "nome": "Platinado", "preco": 150, "descricao": "Descoloração e finalização completa" }
+  ],
+  "promocoes": [
+    {
+      "nome": "Corte + Barba",
+      "preco": 59.9,
+      "de": 65,
+      "valida_ate": "2026-09-27",
+      "descricao": "Combo completo com preço promocional"
+    }
+  ]
+}
