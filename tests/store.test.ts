@@ -87,7 +87,7 @@ describe('Store (db.json)', () => {
 
   it('guarda e limpa agendamento pendente da conversa', () => {
     const store = makeStore();
-    store.setPendingBooking('jid@s.whatsapp.net', { service: 'Corte', date: '2026-09-04', time: '16:00' });
+    store.setPendingBooking('jid@s.whatsapp.net', { service: 'Corte', date: '2026-09-04', time: '16:00', client_name: null });
     expect(store.getPendingBooking('jid@s.whatsapp.net')?.service).toBe('Corte');
     store.setPendingBooking('jid@s.whatsapp.net', null);
     expect(store.getPendingBooking('jid@s.whatsapp.net')).toBeNull();

@@ -1,6 +1,6 @@
-import type { AIProvider } from '../../src/ai.js';
+import type { ChatMessage } from '../../src/ai.js';
 
-export class FakeAIProvider implements AIProvider {
+export class FakeAIProvider {
   calls = 0;
   private queue: string[] = [];
 
@@ -8,7 +8,7 @@ export class FakeAIProvider implements AIProvider {
     this.queue = [...responses];
   }
 
-  async complete(): Promise<string> {
+  async complete(_messages: ChatMessage[], _opts?: { json?: boolean; temperature?: number }): Promise<string> {
     this.calls += 1;
     const next = this.queue.shift();
     if (next !== undefined) return next;
