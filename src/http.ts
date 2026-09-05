@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import type { AgentConfig } from './agent-config.js';
 import type { Catalog } from './catalog.js';
 import type { Booking } from './store.js';
@@ -22,6 +23,15 @@ export interface HttpDeps {
   saveCatalog(catalog: Catalog): void;
   getAdminPhone(): string;
   saveAdminPhone(phone: string): void;
+  /** Se preenchido, toda rota /api/* exige o header "x-panel-token". */
+  panelToken: string;
+}
+
+function tokenMatches(provided: string | string[] | undefined, expected: string): boolean {
+  if (typeof provided !== 'string' || provided.length === 0) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 const PAGE = `<!DOCTYPE html>
@@ -166,6 +176,20 @@ function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 function okMsg(el, msg) { el.className = 'ok-msg'; el.textContent = '✅ ' + msg; }
 function errMsg(el, msg) { el.className = 'err-msg'; el.textContent = '❌ ' + msg; }
 
+// fetch autenticado: anexa o token do painel; em 401, pede o token ao usuário e tenta de novo.
+async function authedFetch(path, opts) {
+  let token = sessionStorage.getItem('panelToken') || '';
+  const doFetch = () => fetch(path, Object.assign({}, opts, { headers: Object.assign({}, (opts && opts.headers) || {}, token ? { 'x-panel-token': token } : {}) }));
+  let r = await doFetch();
+  if (r.status === 401 && !token) {
+    token = prompt('Este painel é protegido. Digite o token (PANEL_TOKEN):') || '';
+    if (!token) return r;
+    sessionStorage.setItem('panelToken', token);
+    r = await doFetch();
+  }
+  return r;
+}
+
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
   document.querySelectorAll('[id^="tab-"]').forEach(x => x.classList.add('hidden'));
@@ -178,7 +202,7 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
 // ---------------- WhatsApp ----------------
 async function refreshWa() {
   try {
-    const s = await (await fetch('/api/status')).json();
+    const s = await (await authedFetch('/api/status')).json();
     const texts = { connected: '✅ Conectado', awaiting_scan: '🟡 Aguardando QR Code', connecting: '🟡 Conectando...', reconnecting: '🟡 Reconectando...', disconnected: '⚪ Desconectado', logged_out: '🔴 Sessão encerrada' };
     $('status-label').textContent = texts[s.status] || s.status;
     $('dot').className = 'dot ' + (s.status === 'connected' ? 'ok' : ['awaiting_scan','connecting','reconnecting'].includes(s.status) ? 'warn' : 'err');
@@ -207,7 +231,7 @@ function renderBookings(bookings) {
 }
 $('btn-connect').addEventListener('click', async () => {
   if (!confirm('Gerar um novo QR Code? A sessão atual será encerrada.')) return;
-  await fetch('/api/reconnect', { method: 'POST' });
+  await authedFetch('/api/reconnect', { method: 'POST' });
   lastQr = null;
   alert('Novo QR gerado — escaneie!');
 });
@@ -217,7 +241,7 @@ $('btn-pair').addEventListener('click', async () => {
   const area = $('pair-area');
   area.innerHTML = '<p class="hint">Gerando código...</p>';
   try {
-    const r = await fetch('/api/pairing-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const r = await authedFetch('/api/pairing-code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro');
     area.innerHTML = '<div class="code">' + esc(data.code) + '</div>' +
@@ -228,7 +252,7 @@ $('btn-refresh-bk').addEventListener('click', refreshWa);
 
 // ---------------- Agente ----------------
 async function loadAgentForm() {
-  agentCfg = await (await fetch('/api/agent-config')).json();
+  agentCfg = await (await authedFetch('/api/agent-config')).json();
   $('ag-empresa').value = agentCfg.empresa || '';
   $('ag-personalidade').value = agentCfg.personalidade || '';
   $('ag-instrucoes').value = agentCfg.instrucoes || '';
@@ -237,7 +261,7 @@ async function loadAgentForm() {
 }
 $('btn-save-agent').addEventListener('click', async () => {
   try {
-    const r = await fetch('/api/agent-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    const r = await authedFetch('/api/agent-config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
       empresa: $('ag-empresa').value, personalidade: $('ag-personalidade').value,
       instrucoes: $('ag-instrucoes').value, boas_vindas: $('ag-boas-vindas').value,
       transferencia: $('ag-transferencia').value,
@@ -274,7 +298,7 @@ function promoRow(p, idx) {
     '<button class="btn red" data-rm="promocoes">✕</button></div>';
 }
 async function loadCatalogForm() {
-  catalog = await (await fetch('/api/catalog')).json();
+  catalog = await (await authedFetch('/api/catalog')).json();
   $('hours-area').innerHTML = hoursRows(catalog);
   $('servicos-area').innerHTML = catalog.servicos.map(servicoRow).join('');
   $('promos-area').innerHTML = catalog.promocoes.map(promoRow).join('');
@@ -307,7 +331,7 @@ $('btn-save-catalog').addEventListener('click', async () => {
   catalog.servicos = readRows('servicos-area');
   catalog.promocoes = readRows('promos-area');
   try {
-    const r = await fetch('/api/catalog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(catalog) });
+    const r = await authedFetch('/api/catalog', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(catalog) });
     if (!r.ok) throw new Error((await r.json()).error || 'Erro');
     okMsg($('catalog-msg'), 'Catálogo salvo!');
   } catch (e) { errMsg($('catalog-msg'), e.message); }
@@ -319,12 +343,12 @@ document.addEventListener('click', (e) => {
 
 // ---------------- Config ----------------
 async function loadConfigForm() {
-  const s = await (await fetch('/api/status')).json();
+  const s = await (await authedFetch('/api/status')).json();
   $('cfg-phone').value = s.adminPhone || '';
 }
 $('btn-save-phone').addEventListener('click', async () => {
   try {
-    const r = await fetch('/api/admin-phone', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: $('cfg-phone').value }) });
+    const r = await authedFetch('/api/admin-phone', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: $('cfg-phone').value }) });
     if (!r.ok) throw new Error((await r.json()).error || 'Erro');
     okMsg($('phone-msg'), 'Número salvo no .env!');
   } catch (e) { errMsg($('phone-msg'), e.message); }
@@ -343,6 +367,11 @@ export function createHttpServer(deps: HttpDeps): http.Server {
       res.writeHead(code, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
     };
+
+    if (url.pathname.startsWith('/api/') && deps.panelToken && !tokenMatches(req.headers['x-panel-token'], deps.panelToken)) {
+      json(401, { error: 'Não autorizado. Informe o token do painel (PANEL_TOKEN).' });
+      return;
+    }
     const readBody = async (): Promise<unknown> => {
       let body = '';
       for await (const chunk of req) body += chunk;

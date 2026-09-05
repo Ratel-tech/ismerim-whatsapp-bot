@@ -14,6 +14,7 @@ export interface AppConfig {
   deepseekApiKey: string;
   deepseekModel: string;
   adminPhone: string;
+  panelToken: string;
   dataDir: string;
   dbFile: string;
   logFile: string;
@@ -28,6 +29,7 @@ export const config: AppConfig = {
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? '',
   deepseekModel: process.env.DEEPSEEK_MODEL ?? 'deepseek-chat',
   adminPhone: process.env.ADMIN_PHONE ?? '',
+  panelToken: process.env.PANEL_TOKEN ?? '',
   dataDir: path.join(ROOT, 'data'),
   dbFile: path.join(ROOT, 'data', 'db.json'),
   logFile: path.join(ROOT, 'data', 'logs.txt'),

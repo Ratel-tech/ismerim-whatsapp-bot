@@ -83,6 +83,7 @@ const server = createHttpServer({
   saveCatalog: (catalog) => saveCatalog(catalog),
   getAdminPhone: () => config.adminPhone,
   saveAdminPhone: (phone) => updateEnv('ADMIN_PHONE', phone),
+  panelToken: config.panelToken,
 });
 
 server.listen(config.port, '127.0.0.1', () => {
