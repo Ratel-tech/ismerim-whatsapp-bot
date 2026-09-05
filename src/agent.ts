@@ -5,7 +5,8 @@ import { buildSystemPrompt } from './prompt.js';
 import { Store, type PendingBooking } from './store.js';
 import { log } from './log.js';
 
-const FALLBACK_REPLY = 'Desculpe, não consegui processar sua mensagem. Pode tentar de novo, por favor?';
+const FALLBACK_REPLY =
+  'Desculpe, não consegui processar sua mensagem. Pode tentar de novo, por favor? 🙂 Posso te ajudar com serviços, preços, horários e agendamento.';
 const NOT_CONFIGURED_REPLY = 'Olá! Ainda estou sendo configurado. Tente novamente em instantes. 😊';
 
 export interface BookingInput {

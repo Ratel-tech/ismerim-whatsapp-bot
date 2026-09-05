@@ -123,6 +123,13 @@ describe('Agent — fluxo completo com agendamento', () => {
     expect(ctx.sent[0]!.text).toContain('Desculpe');
   });
 
+  it('fallback orienta o cliente sobre o que o bot pode fazer', async () => {
+    const provider = new FakeAIProvider(['não é json {{{', 'mais um erro']);
+    const ctx = makeContext(provider);
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'quantos profissionais trabalham aí?', name: 'João' });
+    expect(ctx.sent[0]!.text).toContain('Posso te ajudar com serviços, preços, horários e agendamento');
+  });
+
   it('notificação gerada contém todos os dados', () => {
     const store = makeStore();
     const booking = store.addBooking({
