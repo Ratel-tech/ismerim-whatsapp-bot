@@ -92,4 +92,30 @@ describe('Store (db.json)', () => {
     store.setPendingBooking('jid@s.whatsapp.net', null);
     expect(store.getPendingBooking('jid@s.whatsapp.net')).toBeNull();
   });
+
+  it('arquivo corrompido vira backup e store inicia vazio', () => {
+    const file = path.join(os.tmpdir(), `store-corrupt-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+    fs.writeFileSync(file, '{corrompido');
+    const store = new Store(file);
+    expect(store.listBookings()).toEqual([]);
+    const backups = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(path.basename(file) + '.corrompido-'));
+    expect(backups).toHaveLength(1);
+    fs.rmSync(file, { force: true });
+    for (const b of backups) fs.rmSync(path.join(os.tmpdir(), b), { force: true });
+  });
+
+  it('escrita atomica nao deixa arquivo .tmp residual', () => {
+    const store = makeStore();
+    store.addBooking({
+      clientJid: 'jid@s.whatsapp.net',
+      clientName: null,
+      service: 'Corte',
+      price: 40,
+      date: '2026-09-10',
+      time: '10:00',
+    });
+    const leftovers = fs.readdirSync(path.dirname(store.file)).filter((n) => n.startsWith(path.basename(store.file) + '.tmp'));
+    expect(leftovers).toHaveLength(0);
+    expect(JSON.parse(fs.readFileSync(store.file, 'utf8')).bookings).toHaveLength(1);
+  });
 });

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
+import { log } from './log.js';
 
 export interface StoredClient {
   jid: string;
@@ -62,15 +63,36 @@ export class Store {
 
   private read(): Db {
     try {
-      return JSON.parse(fs.readFileSync(this.file, 'utf8')) as Db;
-    } catch {
+      const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Db;
+      if (
+        !parsed ||
+        typeof parsed !== 'object' ||
+        !Array.isArray(parsed.clients) ||
+        !Array.isArray(parsed.conversations) ||
+        !Array.isArray(parsed.bookings) ||
+        typeof parsed.nextBookingId !== 'number'
+      ) {
+        throw new Error('schema inválido');
+      }
+      return parsed;
+    } catch (err) {
+      // Nunca zera o arquivo em silêncio: preserva uma cópia de backup antes de recomeçar.
+      try {
+        const backup = `${this.file}.corrompido-${Date.now()}`;
+        fs.renameSync(this.file, backup);
+        log('warn', `db.json ilegivel/corrompido; backup salvo em ${backup} (${(err as Error).message})`);
+      } catch {
+        /* backup best-effort */
+      }
       return emptyDb();
     }
   }
 
   private write(): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    fs.writeFileSync(this.file, JSON.stringify(this.db, null, 2));
+    const tmp = `${this.file}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(this.db, null, 2));
+    fs.renameSync(tmp, this.file);
   }
 
   // ---------- clientes ----------
