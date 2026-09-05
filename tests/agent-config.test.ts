@@ -55,4 +55,11 @@ describe('agent-config', () => {
     expect(prompt).toContain('Corte');
     expect(prompt).toContain('R$');
   });
+
+  it('config real nao contem caracteres corrompidos (U+FFFD)', () => {
+    const cfg = loadAgentConfig();
+    for (const v of Object.values(cfg)) {
+      expect(v).not.toContain('\uFFFD');
+    }
+  });
 });
