@@ -1,5 +1,5 @@
 import { formatPreco } from './catalog.js';
-import { Store, type Booking } from './store.js';
+import type { Store, Booking } from './store.js';
 import { log } from './log.js';
 
 export function formatPhone(phone: string): string {

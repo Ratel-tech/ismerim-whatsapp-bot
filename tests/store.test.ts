@@ -43,8 +43,8 @@ describe('Store (db.json)', () => {
     store.addMessage('jid@s.whatsapp.net', 'bot', 'Olá!');
     const msgs = store.getMessages('jid@s.whatsapp.net');
     expect(msgs).toHaveLength(2);
-    expect(msgs[0]!.role).toBe('cliente');
-    expect(msgs[1]!.role).toBe('bot');
+    expect(msgs[0]?.role).toBe('cliente');
+    expect(msgs[1]?.role).toBe('bot');
   });
 
   it('persiste dados entre instâncias (arquivo)', () => {
@@ -98,7 +98,7 @@ describe('Store (db.json)', () => {
     fs.writeFileSync(file, '{corrompido');
     const store = new Store(file);
     expect(store.listBookings()).toEqual([]);
-    const backups = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(path.basename(file) + '.corrompido-'));
+    const backups = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith(`${path.basename(file)}.corrompido-`));
     expect(backups).toHaveLength(1);
     fs.rmSync(file, { force: true });
     for (const b of backups) fs.rmSync(path.join(os.tmpdir(), b), { force: true });
@@ -114,7 +114,7 @@ describe('Store (db.json)', () => {
       date: '2026-09-10',
       time: '10:00',
     });
-    const leftovers = fs.readdirSync(path.dirname(store.file)).filter((n) => n.startsWith(path.basename(store.file) + '.tmp'));
+    const leftovers = fs.readdirSync(path.dirname(store.file)).filter((n) => n.startsWith(`${path.basename(store.file)}.tmp`));
     expect(leftovers).toHaveLength(0);
     expect(JSON.parse(fs.readFileSync(store.file, 'utf8')).bookings).toHaveLength(1);
   });

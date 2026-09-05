@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import QRCode from 'qrcode';
 import qrcodeTerminal from 'qrcode-terminal';
 import makeWASocket, {
@@ -37,7 +36,7 @@ const QR_MIN_DISPLAY_MS = 12_000;
 function extractText(msg: WAMessage): string | null {
   const content = msg.message as Record<string, unknown> | null | undefined;
   if (!content) return null;
-  const conv = content['conversation'];
+  const conv = content.conversation;
   if (typeof conv === 'string' && conv.trim()) return conv.trim();
   for (const key of ['extendedTextMessage', 'imageMessage', 'videoMessage', 'documentMessage', 'audioMessage']) {
     const part = content[key] as { text?: unknown; caption?: unknown } | undefined;

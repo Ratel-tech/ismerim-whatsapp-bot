@@ -1,5 +1,5 @@
 import { formatPreco, isWithinHours, resolveService, type Catalog } from './catalog.js';
-import { Store, type Booking } from './store.js';
+import type { Store, Booking } from './store.js';
 
 export type BookingOutcome =
   | { ok: true; booking: Booking }

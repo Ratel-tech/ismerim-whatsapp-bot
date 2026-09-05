@@ -128,7 +128,7 @@ export function parseAgentResponse(raw: string): ParseResult {
   }
   if (data.booking.time && /^\d{1,2}:\d{2}$/.test(data.booking.time)) {
     const [h, m] = data.booking.time.split(':');
-    data.booking.time = `${h!.padStart(2, '0')}:${m}`;
+    data.booking.time = `${h?.padStart(2, '0')}:${m}`;
   }
   return { ok: true, data, raw };
 }

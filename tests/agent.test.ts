@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../src/store.js';
 import { Agent, type BookingInput } from '../src/agent.js';
-import { loadCatalog } from '../src/catalog.js';
 import { FakeAIProvider, bookingReply } from './helpers/fake-provider.js';
 import { buildNotification } from '../src/notifier.js';
 import fs from 'node:fs';
@@ -61,7 +60,7 @@ describe('Agent — fluxo completo com agendamento', () => {
     const ctx = makeContext(provider);
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'quanto custa o corte?', name: 'João' });
     expect(ctx.sent).toHaveLength(1);
-    expect(ctx.sent[0]!.text).toContain('R$ 40,00');
+    expect(ctx.sent[0]?.text).toContain('R$ 40,00');
   });
 
   it('cliente confirma → onBookingConfirmed recebe os dados validados', async () => {
@@ -78,8 +77,8 @@ describe('Agent — fluxo completo com agendamento', () => {
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'pode confirmar', name: 'João' });
 
     expect(confirmed).toHaveLength(1);
-    expect(confirmed[0]!.service).toBe('Corte');
-    expect(ctx.sent[0]!.text).toContain('confirmado');
+    expect(confirmed[0]?.service).toBe('Corte');
+    expect(ctx.sent[0]?.text).toContain('confirmado');
     expect(ctx.store.getPendingBooking(JID)).toBeNull();
   });
 
@@ -96,7 +95,7 @@ describe('Agent — fluxo completo com agendamento', () => {
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'quero o serviço fantasma', name: 'João' });
 
     expect(confirmed).toHaveLength(0);
-    expect(ctx.sent[0]!.text).toContain('serviço');
+    expect(ctx.sent[0]?.text).toContain('serviço');
   });
 
   it('confirmação com dados incompletos pede mais informações', async () => {
@@ -112,7 +111,7 @@ describe('Agent — fluxo completo com agendamento', () => {
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'confirma', name: 'João' });
 
     expect(confirmed).toHaveLength(0);
-    expect(ctx.sent[0]!.text).toContain('data e horário');
+    expect(ctx.sent[0]?.text).toContain('data e horário');
   });
 
   it('JSON inválido cai no fallback sem quebrar', async () => {
@@ -120,14 +119,14 @@ describe('Agent — fluxo completo com agendamento', () => {
     const ctx = makeContext(provider);
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'oi?', name: 'João' });
     expect(ctx.sent).toHaveLength(1);
-    expect(ctx.sent[0]!.text).toContain('Desculpe');
+    expect(ctx.sent[0]?.text).toContain('Desculpe');
   });
 
   it('fallback orienta o cliente sobre o que o bot pode fazer', async () => {
     const provider = new FakeAIProvider(['não é json {{{', 'mais um erro']);
     const ctx = makeContext(provider);
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'quantos profissionais trabalham aí?', name: 'João' });
-    expect(ctx.sent[0]!.text).toContain('Posso te ajudar com serviços, preços, horários e agendamento');
+    expect(ctx.sent[0]?.text).toContain('Posso te ajudar com serviços, preços, horários e agendamento');
   });
 
   it('notificação gerada contém todos os dados', () => {
@@ -165,7 +164,7 @@ describe('Agent — fluxo completo com agendamento', () => {
     ctx.store.setPendingBooking(JID, { service: 'Corte', date: '2026-09-10', time: '10:00', client_name: 'João' });
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'só isso, obrigado', name: 'João' });
     expect(ctx.store.getPendingBooking(JID)).toBeNull();
-    expect(ctx.sent[0]!.text).toBe('Até logo!');
+    expect(ctx.sent[0]?.text).toBe('Até logo!');
   });
 
   it('intent transferir dispara onTransfer com jid e nome', async () => {
@@ -177,7 +176,7 @@ describe('Agent — fluxo completo com agendamento', () => {
     );
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'quero falar com um humano', name: 'João' });
     expect(transfers).toHaveLength(1);
-    expect(transfers[0]!.jid).toBe(JID);
-    expect(transfers[0]!.clientName).toBe('João');
+    expect(transfers[0]?.jid).toBe(JID);
+    expect(transfers[0]?.clientName).toBe('João');
   });
 });

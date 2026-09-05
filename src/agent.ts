@@ -2,7 +2,7 @@ import { AiError, complete, parseAgentResponse, type ChatMessage } from './ai.js
 import { loadCatalog, resolveService } from './catalog.js';
 import { loadAgentConfig } from './agent-config.js';
 import { buildSystemPrompt } from './prompt.js';
-import { Store, type PendingBooking } from './store.js';
+import type { Store, PendingBooking } from './store.js';
 import { log } from './log.js';
 
 const FALLBACK_REPLY =
