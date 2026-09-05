@@ -181,6 +181,10 @@ export class Store {
     return [...this.db.bookings].sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time)).slice(0, limit);
   }
 
+  listUnnotifiedBookings(): Booking[] {
+    return this.db.bookings.filter((b) => b.notifiedAt === null);
+  }
+
   markNotified(id: number): void {
     const b = this.db.bookings.find((x) => x.id === id);
     if (b) {

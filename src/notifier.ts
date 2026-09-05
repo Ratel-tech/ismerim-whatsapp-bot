@@ -1,5 +1,6 @@
 import { formatPreco } from './catalog.js';
-import type { Booking } from './store.js';
+import { Store, type Booking } from './store.js';
+import { log } from './log.js';
 
 export function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
@@ -30,4 +31,32 @@ export function buildNotification(booking: Booking): string {
     '',
     'Agendamento confirmado pelo cliente.',
   ].join('\n');
+}
+
+export interface FlushOptions {
+  store: Store;
+  send: (jid: string, text: string) => Promise<boolean>;
+  adminPhone: string | null;
+}
+
+/**
+ * Reenvia as notificações pendentes (ex.: WhatsApp estava desconectado no
+ * momento da confirmação). Retorna quantas foram enviadas com sucesso.
+ */
+export async function flushPendingNotifications({ store, send, adminPhone }: FlushOptions): Promise<number> {
+  const pending = store.listUnnotifiedBookings();
+  if (!adminPhone || pending.length === 0) return 0;
+  const adminJid = `${adminPhone}@s.whatsapp.net`;
+  let sentCount = 0;
+  for (const booking of pending) {
+    const ok = await send(adminJid, buildNotification(booking));
+    if (ok) {
+      store.markNotified(booking.id);
+      sentCount += 1;
+    } else {
+      log('warn', `Notificação pendente não enviada (booking #${booking.id}); será re-tentada.`);
+    }
+  }
+  if (sentCount > 0) log('info', `Notificações pendentes reenviadas: ${sentCount}.`);
+  return sentCount;
 }

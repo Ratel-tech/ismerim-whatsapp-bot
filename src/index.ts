@@ -8,7 +8,7 @@ import { createHttpServer } from './http.js';
 import { loadCatalog, saveCatalog } from './catalog.js';
 import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { formatConfirmation, validateAndCreateBooking } from './bookings.js';
-import { buildNotification } from './notifier.js';
+import { buildNotification, flushPendingNotifications } from './notifier.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.sessionDir, { recursive: true });
@@ -78,6 +78,16 @@ server.listen(config.port, '127.0.0.1', () => {
 void whatsapp.connect().catch((err) => {
   log('error', `Falha ao iniciar WhatsApp: ${(err as Error).message}`);
 });
+
+// Reenvia notificações que falharam enquanto o WhatsApp estava desconectado.
+setInterval(() => {
+  if (!whatsapp.isConnected()) return;
+  void flushPendingNotifications({
+    store,
+    send: (jid, text) => whatsapp.sendText(jid, text),
+    adminPhone: config.adminPhone,
+  }).catch((err) => log('error', `Falha ao reenviar notificações: ${(err as Error).message}`));
+}, 60_000);
 
 function shutdown(signal: string): void {
   log('info', `Encerrando (${signal})...`);
