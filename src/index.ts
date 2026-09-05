@@ -8,7 +8,7 @@ import { createHttpServer } from './http.js';
 import { loadCatalog, saveCatalog } from './catalog.js';
 import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { formatConfirmation, validateAndCreateBooking } from './bookings.js';
-import { buildNotification, flushPendingNotifications } from './notifier.js';
+import { buildNotification, buildTransferRequest, flushPendingNotifications } from './notifier.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.sessionDir, { recursive: true });
@@ -47,6 +47,16 @@ const agent = new Agent({
     }
 
     return formatConfirmation(booking);
+  },
+  onTransfer: ({ jid, clientName }) => {
+    if (!config.adminPhone) {
+      log('warn', 'Cliente pediu atendente humano, mas ADMIN_PHONE não está configurado.');
+      return;
+    }
+    const text = buildTransferRequest(clientName, jid);
+    void whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, text).then((ok) => {
+      if (!ok) log('warn', 'WhatsApp desconectado; aviso de transferência não enviado ao dono.');
+    });
   },
 });
 

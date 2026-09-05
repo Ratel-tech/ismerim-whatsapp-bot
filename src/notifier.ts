@@ -33,6 +33,18 @@ export function buildNotification(booking: Booking): string {
   ].join('\n');
 }
 
+/** Aviso ao dono quando um cliente pede para falar com um atendente humano. */
+export function buildTransferRequest(clientName: string | null, clientJid: string): string {
+  return [
+    '🙋 CLIENTE PEDIU ATENDENTE HUMANO',
+    '',
+    `Cliente: ${clientName ?? '—'}`,
+    `Telefone: ${formatPhone(clientJid)}`,
+    '',
+    'Responda o quanto antes para não perder o atendimento.',
+  ].join('\n');
+}
+
 export interface FlushOptions {
   store: Store;
   send: (jid: string, text: string) => Promise<boolean>;

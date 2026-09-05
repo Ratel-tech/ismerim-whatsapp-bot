@@ -26,6 +26,10 @@ export interface AgentOptions {
    * Deve retornar a mensagem final enviada ao cliente.
    */
   onBookingConfirmed?(input: BookingInput): Promise<string>;
+  /**
+   * Disparado quando o cliente pede para falar com um humano (intent "transferir").
+   */
+  onTransfer?(input: { jid: string; clientName: string | null }): void;
 }
 
 export class Agent {
@@ -111,8 +115,12 @@ export class Agent {
     const data = parsed.data;
     let reply = data.reply;
 
-    if (data.intent === 'transferir') {
+    if (data.intent === 'finalizar') {
+      // Cliente encerrou a conversa: descarta qualquer agendamento em andamento.
+      this.opts.store.setPendingBooking(jid, null);
+    } else if (data.intent === 'transferir') {
       reply = agentCfg.transferencia || 'Sem problemas! Vou encaminhar você para o nosso atendente humano. Um momento, por favor. 🙌';
+      this.opts.onTransfer?.({ jid, clientName });
     } else if (data.booking.requested) {
       const b = data.booking;
       const draft: PendingBooking = { service: b.service, date: b.date, time: b.time, client_name: b.client_name };

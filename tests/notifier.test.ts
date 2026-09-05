@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildNotification, flushPendingNotifications, formatPhone } from '../src/notifier.js';
+import { buildNotification, buildTransferRequest, flushPendingNotifications, formatPhone } from '../src/notifier.js';
 import { Store, type Booking } from '../src/store.js';
 
 const booking: Booking = {
@@ -33,6 +33,15 @@ describe('notifier', () => {
     expect(msg).toContain('Horário: 15:30');
     expect(msg.replace(/\u00a0/g, ' ')).toContain('Valor: R$ 59,90');
     expect(msg).toContain('Agendamento confirmado pelo cliente.');
+  });
+});
+
+describe('buildTransferRequest', () => {
+  it('monta aviso de cliente pedindo atendente humano com nome e telefone', () => {
+    const msg = buildTransferRequest('João', '5511888888888@s.whatsapp.net');
+    expect(msg).toContain('ATENDENTE HUMANO');
+    expect(msg).toContain('Cliente: João');
+    expect(msg).toContain('Telefone: +55 (11) 88888-8888');
   });
 });
 

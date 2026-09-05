@@ -21,7 +21,11 @@ function makeStore(): Store {
   return new Store(file);
 }
 
-function makeContext(provider: FakeAIProvider, onBookingConfirmed?: (i: BookingInput) => Promise<string>) {
+function makeContext(
+  provider: FakeAIProvider,
+  onBookingConfirmed?: (i: BookingInput) => Promise<string>,
+  onTransfer?: (input: { jid: string; clientName: string | null }) => void,
+) {
   const store = makeStore();
   const sent: { jid: string; text: string }[] = [];
   const agent = new Agent({
@@ -32,6 +36,7 @@ function makeContext(provider: FakeAIProvider, onBookingConfirmed?: (i: BookingI
       return true;
     },
     onBookingConfirmed,
+    onTransfer,
   });
   return { store, sent, agent, provider };
 }
@@ -146,5 +151,26 @@ describe('Agent — fluxo completo com agendamento', () => {
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
     await ctx.agent.handleInboundMessage({ jid: JID, text: 'oi de novo', name: 'João' });
     expect(ctx.sent).toHaveLength(1);
+  });
+
+  it('intent finalizar limpa o agendamento pendente', async () => {
+    const ctx = makeContext(new FakeAIProvider([JSON.stringify({ intent: 'finalizar', reply: 'Até logo!', booking: {} })]));
+    ctx.store.setPendingBooking(JID, { service: 'Corte', date: '2026-09-10', time: '10:00', client_name: 'João' });
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'só isso, obrigado', name: 'João' });
+    expect(ctx.store.getPendingBooking(JID)).toBeNull();
+    expect(ctx.sent[0]!.text).toBe('Até logo!');
+  });
+
+  it('intent transferir dispara onTransfer com jid e nome', async () => {
+    const transfers: { jid: string; clientName: string | null }[] = [];
+    const ctx = makeContext(
+      new FakeAIProvider([JSON.stringify({ intent: 'transferir', reply: 'ok', booking: {} })]),
+      undefined,
+      (t) => transfers.push(t),
+    );
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'quero falar com um humano', name: 'João' });
+    expect(transfers).toHaveLength(1);
+    expect(transfers[0]!.jid).toBe(JID);
+    expect(transfers[0]!.clientName).toBe('João');
   });
 });
