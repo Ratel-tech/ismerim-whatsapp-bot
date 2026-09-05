@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { config } from './config.js';
 
 export interface Service {
@@ -33,7 +34,7 @@ export function loadCatalog(file: string = config.catalogFile): Catalog {
 }
 
 export function saveCatalog(catalog: Catalog, file: string = config.catalogFile): void {
-  fs.mkdirSync(file.substring(0, file.lastIndexOf('\\')), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(catalog, null, 2));
 }
 

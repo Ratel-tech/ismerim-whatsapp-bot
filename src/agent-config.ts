@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { config } from './config.js';
 
 export interface AgentConfig {
@@ -30,6 +31,6 @@ export function loadAgentConfig(file: string = config.agentFile): AgentConfig {
 }
 
 export function saveAgentConfig(cfg: AgentConfig, file: string = config.agentFile): void {
-  fs.mkdirSync(file.substring(0, file.lastIndexOf('\\')), { recursive: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
 }

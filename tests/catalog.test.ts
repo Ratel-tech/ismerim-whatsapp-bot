@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import os from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   formatHorarios,
@@ -6,6 +8,7 @@ import {
   normalizeName,
   resolvePromocao,
   resolveService,
+  saveCatalog,
   type Catalog,
 } from '../src/catalog.js';
 
@@ -83,5 +86,14 @@ describe('catalog', () => {
     const text = formatHorarios(sample);
     expect(text).toContain('segunda');
     expect(text).toContain('09:00 às 19:00');
+  });
+
+  it('salva catalogo em caminho com separador / (cross-platform)', () => {
+    const dir = os.tmpdir().replaceAll('\\', '/');
+    const file = `${dir}/catalog-save-${Date.now()}-${Math.random().toString(36).slice(2)}/catalog.json`;
+    saveCatalog(sample, file);
+    expect(fs.existsSync(file)).toBe(true);
+    expect(loadCatalog(file).servicos.some((s) => s.nome === 'Corte')).toBe(true);
+    fs.rmSync(file, { force: true });
   });
 });
