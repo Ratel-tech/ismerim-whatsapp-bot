@@ -23,6 +23,9 @@ export interface PendingBooking {
   client_name: string | null;
 }
 
+/** Pendência de agendamento não confirmada expira após este período. */
+export const PENDING_BOOKING_TTL_MS = 24 * 60 * 60 * 1000;
+
 export interface Booking {
   id: number;
   clientJid: string;
@@ -35,9 +38,17 @@ export interface Booking {
   notifiedAt: string | null;
 }
 
+interface Conversation {
+  jid: string;
+  messages: StoredMessage[];
+  pendingBooking: PendingBooking | null;
+  /** Timestamp (ms) da última alteração da pendência; ausente em dados legados = expirada. */
+  pendingBookingAt: number | null;
+}
+
 interface Db {
   clients: StoredClient[];
-  conversations: { jid: string; messages: StoredMessage[]; pendingBooking: PendingBooking | null }[];
+  conversations: Conversation[];
   bookings: Booking[];
   nextBookingId: number;
 }
@@ -115,10 +126,10 @@ export class Store {
   }
 
   // ---------- conversas ----------
-  private conversation(jid: string) {
+  private conversation(jid: string): Conversation {
     let conv = this.db.conversations.find((c) => c.jid === jid);
     if (!conv) {
-      conv = { jid, messages: [], pendingBooking: null };
+      conv = { jid, messages: [], pendingBooking: null, pendingBookingAt: null };
       this.db.conversations.push(conv);
     }
     return conv;
@@ -135,12 +146,18 @@ export class Store {
   }
 
   setPendingBooking(jid: string, booking: PendingBooking | null): void {
-    this.conversation(jid).pendingBooking = booking;
+    const conv = this.conversation(jid);
+    conv.pendingBooking = booking;
+    conv.pendingBookingAt = booking ? Date.now() : null;
     this.write();
   }
 
-  getPendingBooking(jid: string): PendingBooking | null {
-    return this.conversation(jid).pendingBooking ?? null;
+  getPendingBooking(jid: string, now: number = Date.now()): PendingBooking | null {
+    const conv = this.db.conversations.find((c) => c.jid === jid);
+    if (!conv?.pendingBooking) return null;
+    const at = conv.pendingBookingAt ?? 0;
+    if (now - at > PENDING_BOOKING_TTL_MS) return null;
+    return conv.pendingBooking;
   }
 
   // ---------- agendamentos ----------

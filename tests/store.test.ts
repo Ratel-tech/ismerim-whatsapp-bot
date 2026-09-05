@@ -118,4 +118,20 @@ describe('Store (db.json)', () => {
     expect(leftovers).toHaveLength(0);
     expect(JSON.parse(fs.readFileSync(store.file, 'utf8')).bookings).toHaveLength(1);
   });
+
+  it('pendencia expira apos 24h', () => {
+    const store = makeStore();
+    store.setPendingBooking('jid@s.whatsapp.net', { service: 'Corte', date: '2026-09-10', time: '16:00', client_name: 'João' });
+    expect(store.getPendingBooking('jid@s.whatsapp.net', Date.now() + 25 * 60 * 60 * 1000)).toBeNull();
+    expect(store.getPendingBooking('jid@s.whatsapp.net')).not.toBeNull();
+  });
+
+  it('pendencia sem horario registrado nao expira indevidamente (legado)', () => {
+    const file = path.join(os.tmpdir(), `store-legacy-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+    tmpFiles.push(file);
+    const s1 = new Store(file);
+    s1.addMessage('jid@s.whatsapp.net', 'cliente', 'Oi');
+    const s2 = new Store(file);
+    expect(s2.getPendingBooking('jid@s.whatsapp.net', Date.now() + 25 * 60 * 60 * 1000)).toBeNull();
+  });
 });
