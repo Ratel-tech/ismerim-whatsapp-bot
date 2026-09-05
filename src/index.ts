@@ -82,7 +82,8 @@ void whatsapp.connect().catch((err) => {
 function shutdown(signal: string): void {
   log('info', `Encerrando (${signal})...`);
   server.close();
-  void whatsapp.resetSession().finally(() => process.exit(0));
+  // stop() preserva a sessão salva — reiniciar não exige novo QR.
+  void whatsapp.stop().finally(() => process.exit(0));
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));

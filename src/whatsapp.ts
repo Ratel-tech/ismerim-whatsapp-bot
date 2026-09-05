@@ -104,6 +104,20 @@ export class WhatsAppClient {
     await this.connect();
   }
 
+  /**
+   * Encerra a conexão de forma graciosa SEM apagar a sessão salva:
+   * reiniciar o bot não exige novo QR Code.
+   */
+  async stop(): Promise<void> {
+    this.shouldClose = true;
+    this.clearReconnectTimer();
+    this.stopSocket();
+    this.qr = null;
+    this.qrRaw = null;
+    this.phone = null;
+    this.setStatus('disconnected');
+  }
+
   async sendText(jid: string, text: string): Promise<boolean> {
     if (!this.sock || !this.isConnected()) return false;
     try {

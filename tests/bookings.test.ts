@@ -117,13 +117,15 @@ describe('validateAndCreateBooking', () => {
 
   it('formata mensagem de confirmação com dados reais', () => {
     const store = makeStore();
-    const out = validateAndCreateBooking(store, catalog, validInput({ date: '2026-09-04' }));
+    const date = futureWeekday();
+    const [y, m, d] = date.split('-');
+    const out = validateAndCreateBooking(store, catalog, validInput({ date }));
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     const msg = formatConfirmation(out.booking);
     expect(msg).toContain('✅ Agendamento confirmado');
     expect(msg).toContain('Corte');
-    expect(msg).toContain('04/09/2026');
+    expect(msg).toContain(`${d}/${m}/${y}`);
     expect(msg).toContain('15:30');
   });
 });
