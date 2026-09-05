@@ -5,6 +5,7 @@ import {
   formatHorarios,
   isWithinHours,
   loadCatalog,
+  localDateString,
   normalizeName,
   resolvePromocao,
   resolveService,
@@ -95,5 +96,14 @@ describe('catalog', () => {
     expect(fs.existsSync(file)).toBe(true);
     expect(loadCatalog(file).servicos.some((s) => s.nome === 'Corte')).toBe(true);
     fs.rmSync(file, { force: true });
+  });
+
+  it('localDateString usa o dia local conforme o offset informado', () => {
+    // 02:30 UTC com offset +180 min (UTC-3) ainda é 31/08 no horário local.
+    expect(localDateString(new Date('2026-09-01T02:30:00Z'), 180)).toBe('2026-08-31');
+    // 02:30 UTC com offset -540 min (UTC+9) já é 01/09 no horário local.
+    expect(localDateString(new Date('2026-09-01T02:30:00Z'), -540)).toBe('2026-09-01');
+    // Sem offset explícito, usa o fuso da máquina (mesmo comportamento do dia atual).
+    expect(localDateString(new Date('2026-09-01T12:00:00Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });
