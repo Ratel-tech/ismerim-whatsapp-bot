@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../src/store.js';
 import { Agent, type BookingInput } from '../src/agent.js';
 import { loadCatalog } from '../src/catalog.js';
@@ -10,6 +10,10 @@ import path from 'node:path';
 
 const JID = '5511888888888@s.whatsapp.net';
 const tmpFiles: string[] = [];
+
+afterEach(() => {
+  for (const f of tmpFiles.splice(0)) fs.rmSync(f, { force: true });
+});
 
 function makeStore(): Store {
   const file = path.join(os.tmpdir(), `agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
