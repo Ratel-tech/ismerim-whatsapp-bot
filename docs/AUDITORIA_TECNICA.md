@@ -328,3 +328,30 @@ npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution N
 ```
 
 Arquivos de dados consultados (sem expor valores de segredo nem telefones): `.env` (presença de chaves), `data/db.json`, `data/logs.txt` (final), `config/catalog.json`, `config/agent.json` (análise de bytes), `data/sessions` (vazio).
+
+---
+
+## Correções aplicadas (05/09/2026)
+
+Execução via Superpowers (plano em `docs/superpowers/plans/2026-09-04-correcoes-auditoria.md`, TDD por correção, 13 commits). Estado ao final: **76 testes verdes**, typecheck (src+testes) e lint limpos, build OK.
+
+| Achado | Status | Resumo da correção |
+|---|---|---|
+| F-01 shutdown apaga sessão | ✅ | `WhatsAppClient.stop()` encerra socket sem `logout`/`rm`; `index.ts` usa `stop()` no shutdown |
+| F-02 ADMIN_PHONE vazio | ⏳ pendente do dono | Warn no boot quando vazio; mecânica de runtime resolvida (F-06). Preencher no `.env` |
+| F-03 agent.json corrompido | ✅ | Arquivo reescrito em UTF-8 (bytes `EF BF BD` eliminados) + teste guarda contra U+FFFD |
+| F-04 typecheck de testes | ✅ | `tsconfig.test.json` cobre src/tests/scripts; 3 erros latentes corrigidos (incl. `AIProvider` fantasma) |
+| F-05 painel sem auth | ✅ | `PANEL_TOKEN` opcional: rota `/api/*` exige header `x-panel-token` (`timingSafeEqual`); UI pede token em 401; 8 testes HTTP novos |
+| F-06 ADMIN_PHONE só no .env | ✅ | `updateEnv` também atualiza `config.adminPhone` em memória (testes em `config.test.ts`) |
+| F-07 db.json frágil | ✅ | Escrita atômica (`tmp`+`rename`); corrupção vira `*.corrompido-<ts>` + warn (nunca zera em silêncio) |
+| F-08 finalizar/transferir | ✅ | `finalizar` limpa pendência; `transferir` dispara `onTransfer` → dono avisado (`buildTransferRequest`) |
+| F-09 pendência sem expiração | ✅ | `pendingBookingAt` + TTL 24 h (`PENDING_BOOKING_TTL_MS`); legado sem timestamp expira |
+| F-10 testes poluíam log | ✅ | `setLogFile()` + setup Vitest; provado: `data/logs.txt` intocado durante `npm test` |
+| F-11 promoção em UTC | ✅ | `localDateString(now, offset)` e `resolvePromocao` usam dia local (testes determinísticos) |
+| F-12 fallback genérico | ✅/parcial | Fallback agora orienta o cliente; `scripts/smoke-roteiro.ts` mede a taxa — **rodar manualmente** com a chave real |
+| F-13 notificação sem retry | ✅ | `flushPendingNotifications()` a cada 60 s (conectado) reenvia pendentes; `notifiedAt` usado como controle |
+| F-14 `lastIndexOf('\\')` | ✅ | `path.dirname()` em `saveCatalog`/`saveAgentConfig` + teste cross-platform |
+| F-15 sem remote/CI/lint | ✅ | Repo GitHub privado (`ismerim-whatsapp-bot`), `engines: node>=20`, Biome (`npm run lint`), workflow CI (typecheck/test/lint/build) |
+
+Correções adicionais de higiene: teste de `bookings` e dependente de calendário usa data futura dinâmica; `agent.test.ts` limpa temporários; `whatsapp.ts` sem import não usado.
+

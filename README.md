@@ -19,7 +19,10 @@ PORT=3081
 DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_MODEL=deepseek-chat
 ADMIN_PHONE=5511999999999   # número que recebe a notificação de novo agendamento
+PANEL_TOKEN=                # opcional: senha do painel local (se vazio, painel sem senha)
 ```
+
+> Salvar o `ADMIN_PHONE` pela aba **Config** do painel já vale sem reiniciar o bot (atualiza o `.env` e a memória).
 
 ## Catálogo (`config/catalog.json`)
 
@@ -39,19 +42,23 @@ Cliente → WhatsApp (Baileys) → agente IA (DeepSeek) → resposta
          → notificação formatada → ADMIN_PHONE (mesmo número conectado)
 ```
 
-- Sessão salva em `data/sessions` (reiniciar não exige novo QR)
-- Agendamentos e conversas em `data/db.json` (1 arquivo: backup fácil)
+- Sessão salva em `data/sessions` — reiniciar o bot **não exige novo QR** (o encerramento gracioso preserva a sessão)
+- Agendamentos e conversas em `data/db.json` (1 arquivo: backup fácil; escrita atômica e backup automático se corromper)
 - Logs no terminal e em `data/logs.txt`
 - Testar sem celular: `npx tsx scripts/smoke.ts`
+- Medir a qualidade das respostas da IA (DeepSeek real): `npx tsx scripts/smoke-roteiro.ts`
 
 ## Comandos
 
 | Comando | Descrição |
 |---|---|
 | `.\start.ps1` | Instala dependências (1ª vez) e inicia o bot |
-| `npm test` | 44 testes (vitest) |
+| `npm test` | 76+ testes (vitest) — sem tocar no `data/logs.txt` |
+| `npm run typecheck` | Typecheck do código **e** dos testes |
+| `npm run lint` | Lint (Biome) de `src`, `tests` e `scripts` |
 | `npm run build` | Compila TypeScript para `dist/` |
 | `npx tsx scripts/smoke.ts` | Simula um cliente conversando (DeepSeek real) |
+| `npx tsx scripts/smoke-roteiro.ts` | Roteiro de 10 perguntas e mede a taxa de fallback da IA |
 
 ## Estrutura
 
