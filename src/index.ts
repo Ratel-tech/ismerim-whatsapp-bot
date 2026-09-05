@@ -13,6 +13,10 @@ import { buildNotification, flushPendingNotifications } from './notifier.js';
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.sessionDir, { recursive: true });
 
+if (!config.adminPhone) {
+  log('warn', 'ADMIN_PHONE não configurado no .env — notificações de agendamento ao dono desativadas.');
+}
+
 const store = new Store();
 const whatsapp = new WhatsAppClient();
 const agent = new Agent({
