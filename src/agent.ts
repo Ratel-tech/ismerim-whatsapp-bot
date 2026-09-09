@@ -48,6 +48,15 @@ export class Agent {
     if (Date.now() - last < 2000) return;
 
     this.opts.store.addMessage(jid, 'cliente', text);
+
+    // Atendimento humano ativo: o bot não responde automaticamente;
+    // o atendente assume manualmente pelo painel (envio de mensagem + observações).
+    if (this.opts.store.getClient(jid)?.needsHuman) {
+      log('info', `Atendimento humano ativo para ${jid}; resposta automática pausada.`);
+      this.lastTurnAt.set(jid, Date.now());
+      return;
+    }
+
     const inFlight = this.inFlight.get(jid);
     if (inFlight) {
       log('warn', `Mensagem ignorada (turno anterior em andamento): ${jid}`);
@@ -115,6 +124,11 @@ export class Agent {
 
     const data = parsed.data;
     let reply = data.reply;
+
+    // Registra observações que o agente julgou úteis sobre o cliente.
+    for (const note of data.observations ?? []) {
+      if (note?.trim()) this.opts.store.addObservation(jid, note, 'agente');
+    }
 
     if (data.intent === 'finalizar') {
       // Cliente encerrou a conversa: descarta qualquer agendamento em andamento.

@@ -56,6 +56,17 @@ describe('agent-config', () => {
     expect(prompt).toContain('R$');
   });
 
+  it('o prompt anexa o campo prompt_extra do agente', () => {
+    const catalog = loadCatalog();
+    const prompt = buildSystemPrompt(
+      catalog,
+      { ...DEFAULT_AGENT_CONFIG, prompt_extra: 'Nunca ofereça descontos e sempre peça desculpas.' },
+      { clientName: 'João', pendingBooking: null },
+    );
+    expect(prompt).toContain('Prompt personalizado');
+    expect(prompt).toContain('Nunca ofereça descontos e sempre peça desculpas.');
+  });
+
   it('config real nao contem caracteres corrompidos (U+FFFD)', () => {
     const cfg = loadAgentConfig();
     for (const v of Object.values(cfg)) {

@@ -126,6 +126,23 @@ describe('Store (db.json)', () => {
     expect(store.getPendingBooking('jid@s.whatsapp.net')).not.toBeNull();
   });
 
+  it('lista conversas ordenadas pela ultima mensagem do cliente', () => {
+    const store = makeStore();
+    store.upsertClient('5511888888888@s.whatsapp.net', 'João');
+    store.addMessage('5511888888888@s.whatsapp.net', 'cliente', 'Oi');
+    store.addMessage('5511888888888@s.whatsapp.net', 'bot', 'Olá!');
+    store.upsertClient('5521999999999@s.whatsapp.net', 'Maria');
+    store.addMessage('5521999999999@s.whatsapp.net', 'cliente', 'Boa tarde');
+    const convs = store.listConversations();
+    expect(convs).toHaveLength(2);
+    expect(convs[0]?.name).toBe('Maria'); // atividade mais recente primeiro
+    const joao = convs.find((c) => c.name === 'João');
+    expect(joao?.phone).toBe('5511888888888');
+    expect(joao?.lastClientAt).not.toBeNull();
+    expect(joao?.lastText).toBe('Olá!');
+    expect(joao?.messageCount).toBe(2);
+  });
+
   it('pendencia sem horario registrado nao expira indevidamente (legado)', () => {
     const file = path.join(os.tmpdir(), `store-legacy-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
     tmpFiles.push(file);

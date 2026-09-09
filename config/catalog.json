@@ -40,42 +40,34 @@
   "servicos": [
     {
       "nome": "Corte",
-      "preco": 40,
-      "descricao": "Corte de cabelo com tesoura e máquina, finalização com produtos"
+      "preco": 70,
+      "descricao": "Corte de cabelo com tesoura e máquina, finalização com produtos",
+      "de": null
     },
     {
       "nome": "Barba",
-      "preco": 30,
-      "descricao": "Barba modelada com toalha quente e navalha"
+      "preco": 80,
+      "descricao": "Barba modelada com toalha quente e navalha",
+      "de": null
     },
     {
       "nome": "Corte + Barba",
-      "preco": 65,
-      "descricao": "Combo completo de corte e barba"
+      "preco": 140,
+      "descricao": "Combo completo de corte e barba",
+      "de": null
     },
     {
       "nome": "Sobrancelha",
-      "preco": 15,
-      "descricao": "Desenho de sobrancelha com cera ou pinça"
+      "preco": 40,
+      "descricao": "Desenho de sobrancelha com cera ou pinça",
+      "de": null
     },
     {
       "nome": "Pezinho",
-      "preco": 10,
-      "descricao": "Acabamento de cabelo na nuca e laterais"
-    },
-    {
-      "nome": "Platinado",
-      "preco": 150,
-      "descricao": "Descoloração e finalização completa"
+      "preco": 30,
+      "descricao": "Acabamento de cabelo na nuca e laterais",
+      "de": null
     }
   ],
-  "promocoes": [
-    {
-      "nome": "Corte + Barba",
-      "preco": 59.9,
-      "de": 65,
-      "valida_ate": "2026-09-27",
-      "descricao": "Combo completo com preço promocional"
-    }
-  ]
+  "promocoes": []
 }

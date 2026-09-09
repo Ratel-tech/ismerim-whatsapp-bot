@@ -1,0 +1,7 @@
+{
+  "dailyLimit": 200,
+  "batchSize": 5,
+  "messageDelayMs": 12000,
+  "gapMinMs": 60000,
+  "gapMaxMs": 300000
+}

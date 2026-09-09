@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { config } from './config.js';
+import { getProvider } from './providers.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -17,36 +18,26 @@ export class AiError extends Error {
 }
 
 export async function complete(messages: ChatMessage[], opts: { json?: boolean; temperature?: number } = {}): Promise<string> {
-  if (!config.deepseekApiKey) {
-    throw new AiError('no_api_key', 'Chave da API DeepSeek não configurada no .env.');
+  const provider = getProvider(config.aiProvider);
+  if (!config.aiApiKey) {
+    throw new AiError('no_api_key', `Chave da API ${provider.label} não configurada no .env (AI_API_KEY).`);
   }
+  const model = config.aiModel || provider.defaultModel;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.deepseekApiKey}`,
-      },
+    const req = provider.buildRequest(config.aiApiKey, model, messages, opts, controller.signal);
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: req.body,
       signal: controller.signal,
-      body: JSON.stringify({
-        model: config.deepseekModel,
-        messages,
-        temperature: opts.temperature ?? 0.7,
-        max_tokens: 1500,
-        stream: false,
-        ...(opts.json ? { response_format: { type: 'json_object' } } : {}),
-      }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new AiError('http', `DeepSeek HTTP ${res.status}: ${body.slice(0, 200)}`);
+      throw new AiError('http', `${provider.label} HTTP ${res.status}: ${body.slice(0, 200)}`);
     }
-    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new AiError('invalid_response', 'Resposta sem conteúdo.');
-    return content;
+    return provider.parseResponse(await res.json());
   } catch (err) {
     if (err instanceof AiError) throw err;
     if ((err as Error).name === 'AbortError') throw new AiError('timeout', 'Tempo esgotado.');
@@ -74,6 +65,7 @@ const agentResponseSchema = z
     intent: z.enum(['conversation', 'booking', 'transferir', 'finalizar']).default('conversation'),
     reply: z.string().min(1),
     booking: bookingSchema.default({}),
+    observations: z.array(z.string()).default([]),
   })
   .strict();
 

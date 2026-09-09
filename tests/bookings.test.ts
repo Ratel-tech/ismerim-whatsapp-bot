@@ -3,7 +3,7 @@ import {
   formatConfirmation,
   validateAndCreateBooking,
 } from '../src/bookings.js';
-import { loadCatalog, type Catalog } from '../src/catalog.js';
+import type { Catalog } from '../src/catalog.js';
 import { Store } from '../src/store.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,7 +20,26 @@ afterEach(() => {
   for (const f of tmpFiles.splice(0)) fs.rmSync(f, { force: true });
 });
 
-const catalog: Catalog = loadCatalog();
+// Catálogo fixo no teste: independente de o dono editar config/catalog.json no painel.
+const catalog: Catalog = {
+  horarios: {
+    '0': [],
+    '1': [{ open: '09:00', close: '19:00' }],
+    '2': [{ open: '09:00', close: '19:00' }],
+    '3': [{ open: '09:00', close: '19:00' }],
+    '4': [{ open: '09:00', close: '19:00' }],
+    '5': [{ open: '09:00', close: '19:00' }],
+    '6': [{ open: '09:00', close: '19:00' }],
+  },
+  servicos: [
+    { nome: 'Corte', preco: 40 },
+    { nome: 'Barba', preco: 30 },
+    { nome: 'Corte + Barba', preco: 65 },
+  ],
+  promocoes: [
+    { nome: 'Corte + Barba', preco: 59.9, de: 65, valida_ate: '2099-12-31' },
+  ],
+};
 
 function validInput(overrides: Record<string, unknown> = {}) {
   return {

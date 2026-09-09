@@ -6,6 +6,8 @@ export interface AgentConfig {
   empresa: string;
   personalidade: string;
   instrucoes: string;
+  /** Prompt personalizado / regras adicionais anexadas ao system prompt. */
+  prompt_extra: string;
   boas_vindas: string;
   transferencia: string;
 }
@@ -16,6 +18,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
     'Simpático, atencioso, descontraído e profissional. Trata o cliente pelo nome e usa tom de conversa natural de WhatsApp.',
   instrucoes:
     'Responda em português do Brasil, com mensagens curtas e diretas, usando emojis com moderação. Nunca informe dados que não estejam no catálogo.',
+  prompt_extra: '',
   boas_vindas:
     'Olá! 😊 Sou o assistente virtual da Ismerim Barbearia. Posso te ajudar com serviços, preços, horários e agendamentos!',
   transferencia:

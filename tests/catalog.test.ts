@@ -31,11 +31,12 @@ const sample: Catalog = {
 };
 
 describe('catalog', () => {
-  it('carrega o catalog.json real da barbearia', () => {
+  it('carrega o catalog.json real com estrutura válida', () => {
     const catalog = loadCatalog();
-    expect(catalog.servicos.some((s) => s.nome === 'Corte')).toBe(true);
-    expect(catalog.horarios['1']?.[0]?.open).toBe('09:00');
-    expect(catalog.promocoes.length).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(catalog.servicos)).toBe(true);
+    expect(Array.isArray(catalog.promocoes)).toBe(true);
+    expect(typeof catalog.horarios).toBe('object');
+    expect(catalog.servicos.length).toBeGreaterThan(0);
   });
 
   it('normaliza nomes (acentos e espaços)', () => {

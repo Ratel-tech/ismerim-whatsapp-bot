@@ -1,7 +1,7 @@
 # ============================================================
 #  Ismerim WhatsApp Bot - start
 #  Instala dependências se necessário e inicia o bot.
-#  Painel local: http://localhost:3081
+#  Painel local: http://localhost:3081 (se ocupada, sobe +1).
 # ============================================================
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
