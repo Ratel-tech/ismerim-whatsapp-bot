@@ -4,6 +4,7 @@ import {
   validateAndCreateBooking,
 } from '../src/bookings.js';
 import type { Catalog } from '../src/catalog.js';
+import type { Profissional } from '../src/profissionais.js';
 import { Store } from '../src/store.js';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -146,5 +147,66 @@ describe('validateAndCreateBooking', () => {
     expect(msg).toContain('Corte');
     expect(msg).toContain(`${d}/${m}/${y}`);
     expect(msg).toContain('15:30');
+  });
+});
+
+function makeProf(overrides: Partial<Profissional> = {}): Profissional {
+  return {
+    id: 1,
+    nome: 'Juan',
+    telefone: '5521988887777',
+    horarioInicio: '10:00',
+    horarioFim: '20:00',
+    ativo: true,
+    createdAt: '2026-09-09T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('validateAndCreateBooking — associação com profissional', () => {
+  const equipe = [makeProf({ id: 1, nome: 'Juan' }), makeProf({ id: 2, nome: 'Geani' })];
+
+  it('associa o agendamento ao profissional ativo pelo nome', () => {
+    const store = makeStore();
+    const out = validateAndCreateBooking(store, catalog, validInput({ professionalName: 'Juan' }), equipe);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.booking.professionalId).toBe(1);
+    expect(out.booking.professionalName).toBe('Juan');
+    expect(store.listBookings()[0]?.professionalId).toBe(1);
+  });
+
+  it('resolve variação de caixa/acento no nome', () => {
+    const store = makeStore();
+    const out = validateAndCreateBooking(store, catalog, validInput({ professionalName: 'geani' }), equipe);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.booking.professionalId).toBe(2);
+  });
+
+  it('REJEITA profissional inexistente (não cria agendamento)', () => {
+    const store = makeStore();
+    const out = validateAndCreateBooking(store, catalog, validInput({ professionalName: 'Zeca' }), equipe);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.code).toBe('professional_not_found');
+    expect(store.listBookings()).toHaveLength(0);
+  });
+
+  it('REJEITA profissional inativo', () => {
+    const store = makeStore();
+    const out = validateAndCreateBooking(store, catalog, validInput({ professionalName: 'Juan' }), [makeProf({ ativo: false })]);
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.code).toBe('professional_not_found');
+  });
+
+  it('sem profissional o agendamento continua válido (comportamento atual preservado)', () => {
+    const store = makeStore();
+    const out = validateAndCreateBooking(store, catalog, validInput(), equipe);
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.booking.professionalId).toBeNull();
+    expect(out.booking.professionalName).toBeNull();
   });
 });

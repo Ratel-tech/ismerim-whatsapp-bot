@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../src/store.js';
-import { Agent, type BookingInput } from '../src/agent.js';
+import { Agent, type BookingInput, type CancelBookingInput, type RescheduleBookingInput } from '../src/agent.js';
 import { FakeAIProvider, bookingReply } from './helpers/fake-provider.js';
 import { buildNotification } from '../src/notifier.js';
 import fs from 'node:fs';
@@ -24,6 +24,8 @@ function makeContext(
   provider: FakeAIProvider,
   onBookingConfirmed?: (i: BookingInput) => Promise<string>,
   onTransfer?: (input: { jid: string; clientName: string | null }) => void,
+  onCancelBooking?: (i: CancelBookingInput) => Promise<string>,
+  onRescheduleBooking?: (i: RescheduleBookingInput) => Promise<string>,
 ) {
   const store = makeStore();
   const sent: { jid: string; text: string }[] = [];
@@ -36,6 +38,8 @@ function makeContext(
     },
     onBookingConfirmed,
     onTransfer,
+    onCancelBooking,
+    onRescheduleBooking,
   });
   return { store, sent, agent, provider };
 }
@@ -80,6 +84,100 @@ describe('Agent — fluxo completo com agendamento', () => {
     expect(confirmed[0]?.service).toBe('Corte');
     expect(ctx.sent[0]?.text).toContain('confirmado');
     expect(ctx.store.getPendingBooking(JID)).toBeNull();
+  });
+
+  it('cliente confirma com profissional → onBookingConfirmed recebe o profissional', async () => {
+    const date = futureWeekday();
+    const provider = new FakeAIProvider([
+      bookingReply({ requested: true, confirmed: true, service: 'Corte', date, time: '15:30', client_name: 'João', professional: 'Juan' }),
+    ]);
+    const confirmed: BookingInput[] = [];
+    const ctx = makeContext(provider, async (input) => {
+      confirmed.push(input);
+      return 'ok';
+    });
+
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'com o Juan, pode confirmar', name: 'João' });
+
+    expect(confirmed).toHaveLength(1);
+    expect(confirmed[0]?.professional).toBe('Juan');
+  });
+
+  it('agendamento em andamento (não confirmado) guarda o profissional na pendência', async () => {
+    const date = futureWeekday();
+    const provider = new FakeAIProvider([
+      bookingReply({ requested: true, confirmed: false, service: 'Corte', date, time: '15:30', client_name: 'João', professional: 'Geani' }),
+    ]);
+    const ctx = makeContext(provider);
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'quero com a Geani', name: 'João' });
+    expect(ctx.store.getPendingBooking(JID)?.professional).toBe('Geani');
+  });
+
+  it('confirmar cancelamento dispara onCancelBooking com data/hora', async () => {
+    const date = futureWeekday();
+    const provider = new FakeAIProvider([
+      bookingReply({ requested: true, confirmed: true, acao: 'cancelar', service: 'Corte', date, time: '15:30', client_name: 'João' }),
+    ]);
+    const cancels: unknown[] = [];
+    const ctx = makeContext(
+      provider,
+      undefined,
+      undefined,
+      async (input) => {
+        cancels.push(input);
+        return 'Seu agendamento foi cancelado!';
+      },
+    );
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'pode cancelar', name: 'João' });
+    expect(cancels).toHaveLength(1);
+    expect((cancels[0] as { date: string }).date).toBe(date);
+    expect((cancels[0] as { time: string }).time).toBe('15:30');
+    expect(ctx.sent[0]?.text).toContain('cancelado');
+  });
+
+  it('cancelamento sem data/hora NÃO chama o backend (pede o horário)', async () => {
+    const provider = new FakeAIProvider([
+      bookingReply({ requested: true, confirmed: true, acao: 'cancelar', service: 'Corte', date: null, time: null, client_name: 'João' }),
+    ]);
+    let called = 0;
+    const ctx = makeContext(
+      provider,
+      undefined,
+      undefined,
+      async () => {
+        called += 1;
+        return 'x';
+      },
+    );
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'quero cancelar', name: 'João' });
+    expect(called).toBe(0);
+    expect(ctx.sent[0]?.text).toContain('Qual horário');
+  });
+
+  it('confirmar remarcação dispara onRescheduleBooking com original e novo horário', async () => {
+    const originalDate = futureWeekday();
+    const novaDate = futureWeekday();
+    const provider = new FakeAIProvider([
+      bookingReply({ requested: true, confirmed: true, acao: 'remarcar', service: 'Corte', date: novaDate, time: '17:00', original_date: originalDate, original_time: '15:30', client_name: 'João' }),
+    ]);
+    const reschedules: unknown[] = [];
+    const ctx = makeContext(
+      provider,
+      undefined,
+      undefined,
+      undefined,
+      async (input) => {
+        reschedules.push(input);
+        return 'Remarcado!';
+      },
+    );
+    await ctx.agent.handleInboundMessage({ jid: JID, text: 'pode remarcar', name: 'João' });
+    expect(reschedules).toHaveLength(1);
+    const r = reschedules[0] as { date: string; originalDate: string; originalTime: string };
+    expect(r.date).toBe(novaDate);
+    expect(r.originalDate).toBe(originalDate);
+    expect(r.originalTime).toBe('15:30');
+    expect(ctx.sent[0]?.text).toContain('Remarcado');
   });
 
   it('LLM inventou serviço → NÃO chama onBookingConfirmed e responde corretivo', async () => {

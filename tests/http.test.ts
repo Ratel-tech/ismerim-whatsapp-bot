@@ -43,6 +43,9 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
     saveAdminPhone: () => undefined,
     getAiConfig: () => ({ provider: 'deepseek', model: 'deepseek-chat', hasKey: true, providers: [] }),
     saveAiConfig: () => undefined,
+    getProfissionais: () => [],
+    addProfissional: () => ({ id: 1, nome: 'X', horarioInicio: '', horarioFim: '', ativo: true, hasTelefone: false }),
+    updateProfissional: () => null,
     getConversationDetail: () => ({ client: customer, messages: [], bookings: [] }),
     addObservation: () => customer,
     updateObservation: () => customer,
@@ -343,5 +346,104 @@ describe('http api', () => {
         expect((saved[0] as { provider: string }).provider).toBe('openai');
       },
     );
+  });
+});
+
+describe('http api — profissionais', () => {
+  const juan = { id: 1, nome: 'Juan', horarioInicio: '10:00', horarioFim: '20:00', ativo: true, hasTelefone: true };
+  const geani = { id: 2, nome: 'Geani', horarioInicio: '09:00', horarioFim: '19:00', ativo: true, hasTelefone: false };
+
+  it('GET /api/profissionais lista profissionais SEM telefone', async () => {
+    await withServer(makeDeps({ getProfissionais: () => [juan, geani] }), async (base) => {
+      const r = await fetch(`${base}/api/profissionais`);
+      expect(r.status).toBe(200);
+      const body = (await r.json()) as { nome: string; hasTelefone: boolean }[];
+      expect(body).toHaveLength(2);
+      expect(body[0]?.nome).toBe('Juan');
+      const raw = JSON.stringify(body);
+      expect(raw).not.toContain('telefone');
+      expect(raw).not.toContain('998887777');
+    });
+  });
+
+  it('POST /api/profissionais cria e devolve objeto público (sem telefone)', async () => {
+    const created: unknown[] = [];
+    await withServer(
+      makeDeps({
+        addProfissional: (input) => {
+          created.push(input);
+          return { id: 1, nome: input.nome, horarioInicio: input.horarioInicio ?? '', horarioFim: input.horarioFim ?? '', ativo: input.ativo ?? true, hasTelefone: Boolean(input.telefone) };
+        },
+      }),
+      async (base) => {
+        const r = await fetch(`${base}/api/profissionais`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: 'Juan', telefone: '5521988887777', horarioInicio: '10:00', horarioFim: '20:00', ativo: true }),
+        });
+        expect(r.status).toBe(200);
+        const body = (await r.json()) as { id: number; nome: string; hasTelefone: boolean };
+        expect(body.id).toBe(1);
+        expect(body.nome).toBe('Juan');
+        expect(body.hasTelefone).toBe(true);
+        expect(JSON.stringify(body)).not.toContain('telefone');
+        expect((created[0] as { telefone: string }).telefone).toBe('5521988887777');
+      },
+    );
+  });
+
+  it('POST /api/profissionais rejeita nome vazio (422)', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const r = await fetch(`${base}/api/profissionais`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: '   ' }),
+      });
+      expect(r.status).toBe(422);
+    });
+  });
+
+  it('PUT /api/profissionais/:id edita e devolve objeto público', async () => {
+    const received: unknown[] = [];
+    await withServer(
+      makeDeps({
+        updateProfissional: (id, input) => {
+          received.push({ id, ...input });
+          return { id: 7, nome: 'Juan Souza', horarioInicio: input.horarioInicio ?? '', horarioFim: input.horarioFim ?? '', ativo: false, hasTelefone: false };
+        },
+      }),
+      async (base) => {
+        const r = await fetch(`${base}/api/profissionais/7`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome: 'Juan Souza', ativo: false, horarioFim: '18:00' }),
+        });
+        expect(r.status).toBe(200);
+        const body = (await r.json()) as { id: number; nome: string; ativo: boolean };
+        expect(body.id).toBe(7);
+        expect(body.nome).toBe('Juan Souza');
+        expect(body.ativo).toBe(false);
+        expect((received[0] as { id: number; ativo: boolean }).id).toBe(7);
+      },
+    );
+  });
+
+  it('PUT /api/profissionais/:id inexistente responde 404', async () => {
+    await withServer(makeDeps({ updateProfissional: () => null }), async (base) => {
+      const r = await fetch(`${base}/api/profissionais/999`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: 'X' }),
+      });
+      expect(r.status).toBe(404);
+    });
+  });
+
+  it('página contém a aba de Profissionais', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const r = await fetch(`${base}/`);
+      expect(r.status).toBe(200);
+      expect(await r.text()).toContain('data-tab="prof"');
+    });
   });
 });

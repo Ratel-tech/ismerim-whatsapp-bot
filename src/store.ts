@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
+import { normalizeTelefone, toPublicProfissional, type Profissional } from './profissionais.js';
 
 export interface StoredClient {
   jid: string;
@@ -29,6 +30,7 @@ export interface StoredMessage {
 
 export interface PendingBooking {
   service: string | null;
+  professional?: string | null;
   date: string | null;
   time: string | null;
   client_name: string | null;
@@ -55,8 +57,16 @@ export interface Booking {
   price: number;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
+  /** Profissional responsável (opcional; legado não possui). Só o nome/ID, nunca o telefone. */
+  professionalId?: number | null;
+  professionalName?: string | null;
+  /** Cancelado = mantém histórico, mas não ocupa a vaga. */
+  status: 'confirmado' | 'cancelado';
   createdAt: string;
+  updatedAt?: string;
   notifiedAt: string | null;
+  /** Quando a notificação ao profissional foi enviada (null/ausente = pendente). */
+  profissionalNotificadoEm?: string | null;
 }
 
 interface Conversation {
@@ -72,10 +82,12 @@ interface Db {
   conversations: Conversation[];
   bookings: Booking[];
   nextBookingId: number;
+  profissionais: Profissional[];
+  nextProfissionalId: number;
 }
 
 function emptyDb(): Db {
-  return { clients: [], conversations: [], bookings: [], nextBookingId: 1 };
+  return { clients: [], conversations: [], bookings: [], nextBookingId: 1, profissionais: [], nextProfissionalId: 1 };
 }
 
 export class Store {
@@ -105,6 +117,13 @@ export class Store {
           typeof parsed.nextBookingId !== 'number'
         ) {
           throw new Error('schema inválido');
+        }
+        // Migração aditiva: db.json antigo não possui profissionais — nunca zera dados existentes.
+        if (!Array.isArray(parsed.profissionais)) parsed.profissionais = [];
+        if (typeof parsed.nextProfissionalId !== 'number') parsed.nextProfissionalId = 1;
+        // Migração: booking legado sem status é tratado como confirmado (ocupa a vaga).
+        for (const b of parsed.bookings) {
+          if (b.status !== 'confirmado' && b.status !== 'cancelado') b.status = 'confirmado';
         }
         // Migração: observação antiga (string única) vira registro de humano.
         for (const c of parsed.clients) {
@@ -239,6 +258,66 @@ export class Store {
     return this.db.bookings.some((b) => b.clientJid === jid);
   }
 
+  // ---------- profissionais ----------
+  listProfissionais(): Profissional[] {
+    return [...this.db.profissionais];
+  }
+
+  /**
+   * Caminho PÚBLICO de leitura: nunca contém o telefone.
+   * Use para painel/agente/front. O número fica acessível apenas via
+   * getProfissional()/listProfissionais() para uso interno (notificação).
+   */
+  listProfissionaisPublic(): ReturnType<typeof toPublicProfissional>[] {
+    return this.db.profissionais.map(toPublicProfissional);
+  }
+
+  getProfissional(id: number): Profissional | null {
+    return this.db.profissionais.find((p) => p.id === id) ?? null;
+  }
+
+  addProfissional(input: {
+    nome: string;
+    telefone?: string | null;
+    horarioInicio?: string | null;
+    horarioFim?: string | null;
+    ativo?: boolean;
+  }): Profissional {
+    const prof: Profissional = {
+      id: this.db.nextProfissionalId++,
+      nome: (input.nome ?? '').trim(),
+      telefone: normalizeTelefone(input.telefone),
+      horarioInicio: (input.horarioInicio ?? '').trim(),
+      horarioFim: (input.horarioFim ?? '').trim(),
+      ativo: input.ativo ?? true,
+      createdAt: new Date().toISOString(),
+    };
+    this.db.profissionais.push(prof);
+    this.write();
+    return prof;
+  }
+
+  updateProfissional(
+    id: number,
+    patch: {
+      nome?: string;
+      telefone?: string | null;
+      horarioInicio?: string | null;
+      horarioFim?: string | null;
+      ativo?: boolean;
+    },
+  ): Profissional | null {
+    const prof = this.getProfissional(id);
+    if (!prof) return null;
+    if (patch.nome !== undefined) prof.nome = (patch.nome ?? '').trim();
+    if (patch.telefone !== undefined) prof.telefone = normalizeTelefone(patch.telefone);
+    if (patch.horarioInicio !== undefined) prof.horarioInicio = (patch.horarioInicio ?? '').trim();
+    if (patch.horarioFim !== undefined) prof.horarioFim = (patch.horarioFim ?? '').trim();
+    if (patch.ativo !== undefined) prof.ativo = patch.ativo;
+    this.write();
+    return prof;
+  }
+
   // ---------- conversas ----------
   private conversation(jid: string): Conversation {
     let conv = this.db.conversations.find((c) => c.jid === jid);
@@ -299,20 +378,53 @@ export class Store {
   }
 
   // ---------- agendamentos ----------
-  addBooking(input: Omit<Booking, 'id' | 'createdAt' | 'notifiedAt'>): Booking {
+  addBooking(input: Omit<Booking, 'id' | 'createdAt' | 'notifiedAt' | 'profissionalNotificadoEm' | 'status' | 'updatedAt'>): Booking {
     const booking: Booking = {
       ...input,
       id: this.db.nextBookingId++,
+      status: 'confirmado',
       createdAt: new Date().toISOString(),
       notifiedAt: null,
+      profissionalNotificadoEm: null,
     };
     this.db.bookings.push(booking);
     this.write();
     return booking;
   }
 
+  getBooking(id: number): Booking | null {
+    return this.db.bookings.find((b) => b.id === id) ?? null;
+  }
+
+  /** Apenas agendamentos ATIVOS (não cancelados) ocupam vaga. */
   findBooking(date: string, time: string): Booking | null {
-    return this.db.bookings.find((b) => b.date === date && b.time === time) ?? null;
+    return this.db.bookings.find((b) => b.date === date && b.time === time && b.status !== 'cancelado') ?? null;
+  }
+
+  /** Cancela o agendamento (mantém o registro no histórico). Retorna false se não houver ativo. */
+  cancelBooking(id: number): boolean {
+    const b = this.getBooking(id);
+    if (!b || b.status === 'cancelado') return false;
+    b.status = 'cancelado';
+    b.updatedAt = new Date().toISOString();
+    this.write();
+    return true;
+  }
+
+  /** Remarca (altera data/hora e, opcionalmente, o profissional) de um agendamento ativo. */
+  rescheduleBooking(
+    id: number,
+    patch: { date: string; time: string; professionalId?: number | null; professionalName?: string | null },
+  ): Booking | null {
+    const b = this.getBooking(id);
+    if (!b || b.status === 'cancelado') return null;
+    b.date = patch.date;
+    b.time = patch.time;
+    if (patch.professionalId !== undefined) b.professionalId = patch.professionalId;
+    if (patch.professionalName !== undefined) b.professionalName = patch.professionalName;
+    b.updatedAt = new Date().toISOString();
+    this.write();
+    return b;
   }
 
   listBookings(limit = 20): Booking[] {
@@ -320,13 +432,26 @@ export class Store {
   }
 
   listUnnotifiedBookings(): Booking[] {
-    return this.db.bookings.filter((b) => b.notifiedAt === null);
+    return this.db.bookings.filter((b) => b.notifiedAt === null && b.status !== 'cancelado');
   }
 
   markNotified(id: number): void {
     const b = this.db.bookings.find((x) => x.id === id);
     if (b) {
       b.notifiedAt = new Date().toISOString();
+      this.write();
+    }
+  }
+
+  /** Agendamentos ativos (não cancelados) com profissional que ainda não recebeu a notificação. */
+  listBookingsPendingProfissionalNotif(): Booking[] {
+    return this.db.bookings.filter((b) => b.professionalId != null && b.status !== 'cancelado' && !b.profissionalNotificadoEm);
+  }
+
+  markProfissionalNotificado(id: number): void {
+    const b = this.db.bookings.find((x) => x.id === id);
+    if (b) {
+      b.profissionalNotificadoEm = new Date().toISOString();
       this.write();
     }
   }

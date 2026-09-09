@@ -1,5 +1,5 @@
 import { AiError, complete, parseAgentResponse, type ChatMessage } from './ai.js';
-import { loadCatalog, resolveService } from './catalog.js';
+import { loadCatalog, localDateString, resolveService } from './catalog.js';
 import { loadAgentConfig } from './agent-config.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { Store, PendingBooking } from './store.js';
@@ -13,8 +13,28 @@ export interface BookingInput {
   jid: string;
   clientName: string | null;
   service: string;
+  professional: string | null;
   date: string;
   time: string;
+}
+
+export interface CancelBookingInput {
+  jid: string;
+  clientName: string | null;
+  service: string | null;
+  date: string;
+  time: string;
+}
+
+export interface RescheduleBookingInput {
+  jid: string;
+  clientName: string | null;
+  service: string | null;
+  professional: string | null;
+  date: string; // novo horário
+  time: string;
+  originalDate: string; // horário atual a ser remarcado
+  originalTime: string;
 }
 
 export interface AgentOptions {
@@ -31,6 +51,10 @@ export interface AgentOptions {
    * Disparado quando o cliente pede para falar com um humano (intent "transferir").
    */
   onTransfer?(input: { jid: string; clientName: string | null }): void;
+  /** Confirmação de CANCELAMENTO (backend executa; retorna msg final ao cliente). */
+  onCancelBooking?(input: CancelBookingInput): Promise<string>;
+  /** Confirmação de REMARCAÇÃO (backend executa; retorna msg final ao cliente). */
+  onRescheduleBooking?(input: RescheduleBookingInput): Promise<string>;
 }
 
 export class Agent {
@@ -80,6 +104,11 @@ export class Agent {
     const system = buildSystemPrompt(catalog, agentCfg, {
       clientName,
       pendingBooking: pending ? JSON.stringify(pending) : null,
+      profissionais: this.opts.store.listProfissionaisPublic(),
+      clientBookings: this.opts.store
+        .listBookingsByClient(jid)
+        .filter((bk) => bk.status === 'confirmado' && bk.date >= localDateString(new Date()))
+        .map((bk) => ({ date: bk.date, time: bk.time, service: bk.service, professionalName: bk.professionalName ?? null })),
     });
 
     const history = this.opts.store.getMessages(jid, 12);
@@ -138,31 +167,61 @@ export class Agent {
       this.opts.onTransfer?.({ jid, clientName });
     } else if (data.booking.requested) {
       const b = data.booking;
-      const draft: PendingBooking = { service: b.service, date: b.date, time: b.time, client_name: b.client_name };
-
-      if (b.confirmed) {
-        const service = resolveService(catalog, b.service);
-        if (!service) {
-          reply = 'Desculpe, não identifiquei esse serviço. Poderia me dizer qual dos nossos serviços você gostaria?';
-          log('warn', `Agendamento rejeitado: serviço inventado "${b.service}"`);
-        } else if (!b.date || !b.time) {
-          reply = 'Para confirmar, preciso do serviço, data e horário. Pode me passar?';
-        } else if (this.opts.onBookingConfirmed) {
-          reply = await this.opts.onBookingConfirmed({
-            jid,
-            clientName: b.client_name ?? clientName,
-            service: service.nome,
-            date: b.date,
-            time: b.time,
-          });
-          this.opts.store.setPendingBooking(jid, null);
+      if (b.acao === 'cancelar' || b.acao === 'remarcar') {
+        // Ações de gestão (cancelar/remarcar): só executam no backend após confirmação.
+        this.opts.store.setPendingBooking(jid, null);
+        if (!b.confirmed) {
+          // Turno de pergunta/confirmação: mantém o texto do modelo.
+        } else if (b.acao === 'cancelar') {
+          reply = !b.date || !b.time
+            ? 'Claro! Qual horário você gostaria de cancelar? Pode me dizer o dia e o horário do seu agendamento. 🙂'
+            : this.opts.onCancelBooking
+              ? await this.opts.onCancelBooking({ jid, clientName: b.client_name ?? clientName, service: b.service, date: b.date, time: b.time })
+              : 'Tudo bem, seu agendamento foi cancelado. ✅';
         } else {
-          reply = `✅ Recebemos seu pedido de agendamento!\n\n✂️ Serviço: ${service.nome}\n📅 Data: ${b.date}\n🕒 Horário: ${b.time}\n\nEm instantes nossa equipe confirma com você. 😉`;
-          log('info', `PEDIDO DE AGENDAMENTO (sem notificação): ${clientName ?? '?'} | ${service.nome} | ${b.date} ${b.time}`);
-          this.opts.store.setPendingBooking(jid, null);
+          reply = !(b.date && b.time && b.original_date && b.original_time)
+            ? 'Claro! Me confirma para qual dia e horário você quer remarcar? 🙂'
+            : this.opts.onRescheduleBooking
+              ? await this.opts.onRescheduleBooking({
+                  jid,
+                  clientName: b.client_name ?? clientName,
+                  service: b.service,
+                  professional: b.professional,
+                  date: b.date,
+                  time: b.time,
+                  originalDate: b.original_date,
+                  originalTime: b.original_time,
+                })
+              : 'Pronto, seu agendamento foi remarcado. ✅';
         }
       } else {
-        this.opts.store.setPendingBooking(jid, draft);
+        const draft: PendingBooking = { service: b.service, date: b.date, time: b.time, client_name: b.client_name, professional: b.professional };
+
+        if (b.confirmed) {
+          const service = resolveService(catalog, b.service);
+          if (!service) {
+            reply = 'Desculpe, não identifiquei esse serviço. Poderia me dizer qual dos nossos serviços você gostaria?';
+            log('warn', `Agendamento rejeitado: serviço inventado "${b.service}"`);
+          } else if (!b.date || !b.time) {
+            reply = 'Para confirmar, preciso do serviço, data e horário. Pode me passar?';
+          } else if (this.opts.onBookingConfirmed) {
+            reply = await this.opts.onBookingConfirmed({
+              jid,
+              clientName: b.client_name ?? clientName,
+              service: service.nome,
+              professional: b.professional,
+              date: b.date,
+              time: b.time,
+            });
+            this.opts.store.setPendingBooking(jid, null);
+          } else {
+            reply = `✅ Recebemos seu pedido de agendamento!\n\n✂️ Serviço: ${service.nome}\n📅 Data: ${b.date}\n🕒 Horário: ${b.time}\n\nEm instantes nossa equipe confirma com você. 😉`;
+            log('info', `PEDIDO DE AGENDAMENTO (sem notificação): ${clientName ?? '?'} | ${service.nome} | ${b.date} ${b.time}`);
+            this.opts.store.setPendingBooking(jid, null);
+          }
+        } else {
+          this.opts.store.setPendingBooking(jid, draft);
+        }
       }
     }
 

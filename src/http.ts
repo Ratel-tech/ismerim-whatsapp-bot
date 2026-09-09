@@ -2,6 +2,7 @@ import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { AgentConfig } from './agent-config.js';
 import type { Catalog } from './catalog.js';
+import type { ProfissionalPublic } from './profissionais.js';
 import type { Booking } from './store.js';
 import type { WaStatus } from './whatsapp.js';
 import type { ProviderSummary } from './providers.js';
@@ -98,6 +99,20 @@ export interface SaveAiConfigInput {
   apiKey?: string;
 }
 
+/**
+ * Dados recebidos do painel para criar/editar um profissional.
+ * `telefone` é aceito apenas na ESCRITA (nunca é devolvido nas leituras).
+ * - undefined = manter o telefone atual (edição);
+ * - '' = remover o telefone cadastrado.
+ */
+export interface ProfissionalInput {
+  nome: string;
+  telefone?: string | null;
+  horarioInicio?: string | null;
+  horarioFim?: string | null;
+  ativo?: boolean;
+}
+
 export interface HttpDeps {
   getStatus(): StatusPayload;
   onReconnect(): Promise<void>;
@@ -111,6 +126,10 @@ export interface HttpDeps {
   saveAdminPhone(phone: string): void;
   getAiConfig(): AiConfigPayload;
   saveAiConfig(cfg: SaveAiConfigInput): void;
+  /** Profissionais (DTO público — nunca contém o telefone). */
+  getProfissionais(): ProfissionalPublic[];
+  addProfissional(input: ProfissionalInput): ProfissionalPublic;
+  updateProfissional(id: number, input: ProfissionalInput): ProfissionalPublic | null;
   /** `refresh` força a reconstrução do cache de chats do WhatsApp. */
   listConversations(refresh?: boolean): ConversationListEntry[];
   getConversationDetail(jid: string): ConversationDetailPayload;
@@ -270,6 +289,7 @@ const PAGE = `<!DOCTYPE html>
   <div class="rail-brand">💈</div>
   <button class="rail-btn on" data-tab="wa" title="WhatsApp"><span class="ic">📱</span><span class="lb">WhatsApp</span></button>
   <button class="rail-btn" data-tab="agend" title="Agendamentos"><span class="ic">📅</span><span class="lb">Agendamentos</span></button>
+  <button class="rail-btn" data-tab="prof" title="Profissionais"><span class="ic">👥</span><span class="lb">Profissionais</span></button>
   <button class="rail-btn" data-tab="conv" title="Conversas"><span class="ic">💬</span><span class="lb">Conversas</span></button>
   <button class="rail-btn" data-tab="agente" title="Agente"><span class="ic">🤖</span><span class="lb">Agente</span></button>
   <button class="rail-btn" data-tab="catalogo" title="Catálogo"><span class="ic">🗂️</span><span class="lb">Catálogo</span></button>
@@ -302,6 +322,47 @@ const PAGE = `<!DOCTYPE html>
       <h3 style="margin-bottom:10px">📅 Agendamentos confirmados</h3>
       <table id="bookings"><tbody><tr><td class="sub">Nenhum agendamento ainda.</td></tr></tbody></table>
       <button class="btn" id="btn-refresh-bk" style="margin-top:10px">🔄 Atualizar</button>
+    </div>
+  </div>
+
+  <!-- ================= Profissionais ================= -->
+  <div id="tab-prof" class="hidden">
+    <div class="card">
+      <h3 style="margin-bottom:10px">👥 Profissionais (cadastro e notificação)</h3>
+      <table>
+        <thead><tr><th>Nome</th><th>Horário</th><th>Status</th><th>Telefone</th><th style="width:210px">Ações</th></tr></thead>
+        <tbody id="prof-list"><tr><td class="sub">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card" id="prof-form-card">
+      <div class="sec-title" id="prof-form-title">➕ Novo profissional</div>
+      <div class="row">
+        <label style="width:110px">Nome</label>
+        <input id="pf-nome" style="flex:1" placeholder="Nome do profissional" />
+      </div>
+      <div class="row">
+        <label style="width:110px">Telefone</label>
+        <input id="pf-tel" style="flex:1" placeholder="somente dígitos com DDI (ex.: 5521999999999)" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label style="width:110px">Início</label>
+        <input id="pf-inicio" class="hora" type="time" />
+        <label style="width:60px">Fim</label>
+        <input id="pf-fim" class="hora" type="time" />
+        <label style="width:120px">Ativo</label>
+        <input id="pf-ativo" type="checkbox" checked style="width:auto" />
+      </div>
+      <div class="row" id="pf-rmtel-row" style="display:none">
+        <label style="width:110px">Telefone</label>
+        <span class="hint">Já existe um número cadastrado (privado). Para trocar, digite o novo acima. Para remover, marque:</span>
+        <label style="width:150px"><input id="pf-rmtel" type="checkbox" /> remover telefone</label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn green" id="btn-prof-save">💾 Salvar profissional</button>
+        <button class="btn" id="btn-prof-cancel">Cancelar edição</button>
+      </div>
+      <div id="prof-msg"></div>
+      <div class="hint">O telefone é privado: fica apenas no backend e nunca é exibido ou enviado ao agente/cliente.</div>
     </div>
   </div>
 
@@ -452,6 +513,7 @@ document.querySelectorAll('.rail-btn').forEach((t) =>
     if (t.dataset.tab === 'catalogo') loadCatalogForm();
     if (t.dataset.tab === 'config') loadConfigForm();
     if (t.dataset.tab === 'conv') loadConversations();
+    if (t.dataset.tab === 'prof') loadProfissionaisForm();
   }));
 
 // Navegação lateral: expandir/recolher (ícones ⇄ ícones + nomes)
@@ -485,7 +547,7 @@ function renderBookings(bookings) {
   const tb = document.querySelector('#bookings tbody');
   if (bookings && bookings.length) {
     tb.innerHTML = bookings.map(b =>
-      '<tr><td>' + esc(b.clientName || '—') + '</td><td>' + esc(b.service) + '</td><td>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</td><td>R$ ' + Number(b.price).toFixed(2).replace('.', ',') + '</td></tr>'
+      '<tr><td>' + esc(b.clientName || '—') + (b.status === 'cancelado' ? ' <span class="badge h">cancelado</span>' : '') + '</td><td>' + esc(b.service) + '</td><td>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</td><td>R$ ' + Number(b.price).toFixed(2).replace('.', ',') + '</td></tr>'
     ).join('');
   } else {
     tb.innerHTML = '<tr><td class="sub">Nenhum agendamento ainda.</td></tr>';
@@ -828,7 +890,7 @@ function renderDetail(d) {
     '<div class="field" style="margin-top:10px"><textarea id="obs-note" placeholder="Nova observação (ficará marcada como Humano)"></textarea></div>' +
     '<button class="btn green" id="btn-add-obs" data-obs-add style="width:100%;margin:0">➕ Adicionar observação</button>' +
     '<div class="summary-card"><div class="top"><b>Etapa do funil</b><span>' + esc(c.funil.label) + '</span></div><div class="bar"><span style="width:' + pct + '%"></span></div><div class="sub" style="margin:8px 0 0">' + c.funil.stage + ' de ' + c.funil.total + ' etapas</div></div>' +
-    '<div class="sec2">Agendamentos</div>' + (d.bookings.length ? d.bookings.map((b) => '<div class="ficha-row"><span class="k">' + esc(b.service || '') + '</span><b>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</b></div>').join('') : '<div class="sub">Nenhum agendamento.</div>') +
+    '<div class="sec2">Agendamentos</div>' + (d.bookings.length ? d.bookings.map((b) => '<div class="ficha-row"><span class="k">' + esc(b.service || '') + (b.status === 'cancelado' ? ' (cancelado)' : '') + '</span><b>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</b></div>').join('') : '<div class="sub">Nenhum agendamento.</div>') +
     '<div style="height:20px"></div>';
   $('btn-wa').addEventListener('click', () => window.open('https://wa.me/' + (c.phone || ''), '_blank'));
   $('btn-copy').addEventListener('click', () => { navigator.clipboard.writeText(c.phone || ''); alert('Copiado'); });
@@ -979,6 +1041,100 @@ $('btn-bc-settings').addEventListener('click', async () => {
 });
 setInterval(refreshBroadcast, 5000);
 
+// ---------------- Profissionais (cadastro) ----------------
+let profs = [];
+let profEditId = null;
+function profRow(p) {
+  const hours = (p.horarioInicio || '--') + ' às ' + (p.horarioFim || '--');
+  const status = p.ativo ? '<span class="badge g">ativo</span>' : '<span class="badge h">inativo</span>';
+  const tel = p.hasTelefone ? '✓ cadastrado' : '—';
+  return '<tr>' +
+    '<td>' + esc(p.nome) + '</td>' +
+    '<td>' + esc(hours) + '</td>' +
+    '<td>' + status + '</td>' +
+    '<td>' + tel + '</td>' +
+    '<td><button class="btn-mini" data-prof-edit="' + p.id + '">✏️ Editar</button> ' +
+    '<button class="btn-mini" data-prof-toggle="' + p.id + '">' + (p.ativo ? '⏸️ Desativar' : '▶️ Ativar') + '</button></td>' +
+    '</tr>';
+}
+function renderProfList() {
+  const tb = document.querySelector('#prof-list');
+  if (!profs.length) { tb.innerHTML = '<tr><td class="sub" colspan="5">Nenhum profissional cadastrado ainda.</td></tr>'; return; }
+  tb.innerHTML = profs.map(profRow).join('');
+}
+function resetProfForm() {
+  profEditId = null;
+  $('prof-form-title').textContent = '➕ Novo profissional';
+  $('pf-nome').value = '';
+  $('pf-tel').value = '';
+  $('pf-tel').placeholder = 'somente dígitos com DDI (ex.: 5521999999999)';
+  $('pf-inicio').value = '';
+  $('pf-fim').value = '';
+  $('pf-ativo').checked = true;
+  $('pf-rmtel').checked = false;
+  $('pf-rmtel-row').style.display = 'none';
+  $('prof-msg').textContent = '';
+}
+async function loadProfissionaisForm() {
+  try {
+    const r = await authedFetch('/api/profissionais');
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    profs = Array.isArray(data) ? data : [];
+    renderProfList();
+    resetProfForm();
+  } catch (e) { $('prof-list').innerHTML = '<tr><td class="err-msg">' + esc(e.message) + '</td></tr>'; }
+}
+function startEditProf(p) {
+  profEditId = p.id;
+  $('prof-form-title').textContent = '✏️ Editando: ' + esc(p.nome);
+  $('pf-nome').value = p.nome || '';
+  $('pf-tel').value = '';
+  $('pf-tel').placeholder = p.hasTelefone ? 'deixe em branco para manter o número atual' : 'somente dígitos com DDI';
+  $('pf-inicio').value = p.horarioInicio || '';
+  $('pf-fim').value = p.horarioFim || '';
+  $('pf-ativo').checked = !!p.ativo;
+  $('pf-rmtel').checked = false;
+  $('pf-rmtel-row').style.display = p.hasTelefone ? '' : 'none';
+  $('prof-msg').textContent = '';
+  $('prof-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function saveProf() {
+  const nome = $('pf-nome').value.trim();
+  if (!nome) { errMsg($('prof-msg'), 'Informe o nome do profissional.'); return; }
+  const editing = profEditId !== null;
+  const telValue = $('pf-tel').value.trim();
+  const telefone = editing ? (telValue === '' ? ($('pf-rmtel').checked ? '' : undefined) : telValue) : telValue;
+  const payload = { nome, telefone, horarioInicio: $('pf-inicio').value || '', horarioFim: $('pf-fim').value || '', ativo: $('pf-ativo').checked };
+  try {
+    const path = editing ? '/api/profissionais/' + profEditId : '/api/profissionais';
+    const r = await authedFetch(path, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    okMsg($('prof-msg'), 'Profissional salvo!');
+    await loadProfissionaisForm();
+  } catch (e) { errMsg($('prof-msg'), e.message); }
+}
+async function toggleProf(id) {
+  const p = profs.find((x) => x.id === id);
+  if (!p) return;
+  if (!confirm((p.ativo ? 'Desativar' : 'Ativar') + ' o profissional ' + p.nome + '?')) return;
+  try {
+    const r = await authedFetch('/api/profissionais/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: p.nome, horarioInicio: p.horarioInicio || '', horarioFim: p.horarioFim || '', ativo: !p.ativo }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    await loadProfissionaisForm();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+$('btn-prof-save').addEventListener('click', saveProf);
+$('btn-prof-cancel').addEventListener('click', resetProfForm);
+document.addEventListener('click', (e) => {
+  const ed = e.target.closest('[data-prof-edit]');
+  if (ed) { const p = profs.find((x) => x.id === Number(ed.dataset.profEdit)); if (p) startEditProf(p); return; }
+  const tg = e.target.closest('[data-prof-toggle]');
+  if (tg) { void toggleProf(Number(tg.dataset.profToggle)); }
+});
+
 refreshWa();
 setInterval(refreshWa, 3000);
 </script>
@@ -1014,6 +1170,35 @@ export function createHttpServer(deps: HttpDeps): http.Server {
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
       json(200, deps.getStatus());
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/profissionais') {
+      json(200, deps.getProfissionais());
+      return;
+    }
+    if (req.method === 'POST' && url.pathname === '/api/profissionais') {
+      const body = (await readBody()) as ProfissionalInput;
+      if (typeof body.nome !== 'string' || !body.nome.trim()) {
+        json(422, { error: 'Informe o nome do profissional.' });
+        return;
+      }
+      json(200, deps.addProfissional(body));
+      return;
+    }
+    const profEdit = url.pathname.match(/^\/api\/profissionais\/(\d+)$/);
+    if (req.method === 'PUT' && profEdit) {
+      const id = Number(profEdit[1]);
+      const body = (await readBody()) as ProfissionalInput;
+      if (typeof body.nome !== 'string' || !body.nome.trim()) {
+        json(422, { error: 'Informe o nome do profissional.' });
+        return;
+      }
+      const updated = deps.updateProfissional(id, body);
+      if (!updated) {
+        json(404, { error: 'Profissional não encontrado.' });
+        return;
+      }
+      json(200, updated);
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/conversations') {

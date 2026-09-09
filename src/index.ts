@@ -9,8 +9,19 @@ import { BroadcastManager } from './broadcast.js';
 import { loadCatalog, saveCatalog, localDateString } from './catalog.js';
 import { computeFunnel } from './funnel.js';
 import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
-import { formatConfirmation, validateAndCreateBooking } from './bookings.js';
-import { buildNotification, buildTransferRequest, flushPendingNotifications } from './notifier.js';
+import { toPublicProfissional } from './profissionais.js';
+import { cancelBookingCliente, formatConfirmation, validateAndCreateBooking, validateAndRescheduleBooking } from './bookings.js';
+import {
+  buildCancellationNotification,
+  buildNotification,
+  buildRescheduleNotification,
+  buildTransferRequest,
+  flushPendingNotifications,
+  flushPendingProfessionalNotifications,
+  notifyProfessionalCancellation,
+  notifyProfessionalForBooking,
+  notifyProfessionalReschedule,
+} from './notifier.js';
 import { isProviderId, listProviders } from './providers.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
@@ -27,10 +38,7 @@ const agent = new Agent({
   store,
   sendText: (jid, text) => whatsapp.sendText(jid, text),
   onBookingConfirmed: async (input) => {
-    const outcome = validateAndCreateBooking(store, loadCatalog(), {
-      ...input,
-      serviceName: input.service,
-    });
+    const outcome = validateAndCreateBooking(store, loadCatalog(), { ...input, serviceName: input.service }, store.listProfissionais());
     if (!outcome.ok) {
       log('warn', `Agendamento rejeitado (${outcome.code}): ${input.service} ${input.date} ${input.time}`);
       return outcome.userMessage;
@@ -50,6 +58,14 @@ const agent = new Agent({
       log('warn', 'ADMIN_PHONE não configurado no .env — notificação não enviada.');
     }
 
+    // Notificação do PROFISSIONAL: independente do ADMIN e nunca bloqueia o
+    // agendamento. O telefone é resolvido no backend (nunca exposto).
+    await notifyProfessionalForBooking({
+      store,
+      booking,
+      send: (jid, text) => whatsapp.sendText(jid, text),
+    });
+
     return formatConfirmation(booking);
   },
   onTransfer: ({ jid, clientName }) => {
@@ -62,6 +78,69 @@ const agent = new Agent({
     void whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, text).then((ok) => {
       if (!ok) log('warn', 'WhatsApp desconectado; aviso de transferência não enviado ao dono.');
     });
+  },
+  onCancelBooking: async (input) => {
+    const out = cancelBookingCliente(store, { jid: input.jid, date: input.date, time: input.time });
+    if (!out.ok) {
+      log('warn', `Cancelamento rejeitado (${out.code}): ${input.service} ${input.date} ${input.time}`);
+      return out.userMessage;
+    }
+    const b = out.booking;
+    log('info', `Agendamento #${b.id} cancelado: ${b.clientName} | ${b.service} | ${b.date} ${b.time}`);
+
+    if (config.adminPhone) {
+      const sent = await whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, buildCancellationNotification(b, true));
+      if (!sent) log('warn', 'WhatsApp desconectado; cancelamento não notificado ao ADMIN.');
+    } else {
+      log('warn', 'ADMIN_PHONE não configurado — cancelamento não notificado ao ADMIN.');
+    }
+    await notifyProfessionalCancellation({ store, booking: b, send: (jid, text) => whatsapp.sendText(jid, text) });
+
+    return [
+      '✅ Seu agendamento foi cancelado!',
+      '',
+      `✂️ Serviço: ${b.service}`,
+      `📅 Data: ${b.date.split('-').reverse().join('/')}`,
+      `🕒 Horário: ${b.time}`,
+      '',
+      'Se quiser, posso marcar um novo horário para você. 😉',
+    ].join('\n');
+  },
+  onRescheduleBooking: async (input) => {
+    const out = validateAndRescheduleBooking(store, loadCatalog(), store.listProfissionais(), {
+      jid: input.jid,
+      originalDate: input.originalDate,
+      originalTime: input.originalTime,
+      date: input.date,
+      time: input.time,
+      professionalName: input.professional,
+    });
+    if (!out.ok) {
+      log('warn', `Remarcação rejeitada (${out.code}): ${input.originalDate} ${input.originalTime} → ${input.date} ${input.time}`);
+      return out.userMessage;
+    }
+    const b = out.booking;
+    log('info', `Agendamento #${b.id} remarcado: ${b.clientName} | ${b.service} | ${input.originalDate} ${input.originalTime} → ${b.date} ${b.time}`);
+
+    const from = { date: input.originalDate, time: input.originalTime };
+    if (config.adminPhone) {
+      const sent = await whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, buildRescheduleNotification(b, from, true));
+      if (!sent) log('warn', 'WhatsApp desconectado; remarcação não notificada ao ADMIN.');
+    } else {
+      log('warn', 'ADMIN_PHONE não configurado — remarcação não notificada ao ADMIN.');
+    }
+    await notifyProfessionalReschedule({ store, booking: b, from, send: (jid, text) => whatsapp.sendText(jid, text) });
+
+    return [
+      '✅ Agendamento remarcado!',
+      '',
+      `✂️ Serviço: ${b.service}`,
+      `📅 De: ${from.date.split('-').reverse().join('/')} às ${from.time}`,
+      `📅 Para: ${b.date.split('-').reverse().join('/')} às ${b.time}`,
+      `${b.professionalName ? `👤 Profissional: ${b.professionalName}` : ''}`,
+      '',
+      'Até lá! 😉',
+    ].join('\n');
   },
 });
 
@@ -182,6 +261,12 @@ const server = createHttpServer({
     updateEnv('AI_MODEL', model);
     if (apiKey?.trim()) updateEnv('AI_API_KEY', apiKey.trim());
   },
+  getProfissionais: () => store.listProfissionaisPublic(),
+  addProfissional: (input) => toPublicProfissional(store.addProfissional(input)),
+  updateProfissional: (id, input) => {
+    const updated = store.updateProfissional(id, input);
+    return updated ? toPublicProfissional(updated) : null;
+  },
   listConversations: (refresh) => listConversations(refresh),
   getConversationDetail: (jid) => conversationDetail(jid),
   addObservation: (jid, text) => {
@@ -262,6 +347,10 @@ setInterval(() => {
     send: (jid, text) => whatsapp.sendText(jid, text),
     adminPhone: config.adminPhone,
   }).catch((err) => log('error', `Falha ao reenviar notificações: ${(err as Error).message}`));
+  void flushPendingProfessionalNotifications({
+    store,
+    send: (jid, text) => whatsapp.sendText(jid, text),
+  }).catch((err) => log('error', `Falha ao reenviar notificações ao profissional: ${(err as Error).message}`));
 }, 60_000);
 
 function shutdown(signal: string): void {

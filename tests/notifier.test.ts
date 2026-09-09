@@ -13,6 +13,7 @@ const booking: Booking = {
   price: 59.9,
   date: '2026-08-28',
   time: '15:30',
+  status: 'confirmado',
   createdAt: new Date().toISOString(),
   notifiedAt: null,
 };

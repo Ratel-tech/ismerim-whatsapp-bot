@@ -53,9 +53,13 @@ const bookingSchema = z
   .object({
     requested: z.boolean().default(false),
     confirmed: z.boolean().default(false),
+    acao: z.enum(['criar', 'cancelar', 'remarcar']).default('criar'),
     service: z.string().nullable().default(null),
+    professional: z.string().nullable().default(null),
     date: z.string().nullable().default(null),
     time: z.string().nullable().default(null),
+    original_date: z.string().nullable().default(null),
+    original_time: z.string().nullable().default(null),
     client_name: z.string().nullable().default(null),
   })
   .strict();
@@ -111,16 +115,27 @@ export function parseAgentResponse(raw: string): ParseResult {
   }
   const data = result.data;
   data.booking.service = data.booking.service?.trim() || null;
+  data.booking.professional = data.booking.professional?.trim() || null;
   data.booking.date = data.booking.date?.trim() || null;
   data.booking.time = data.booking.time?.trim() || null;
+  data.booking.original_date = data.booking.original_date?.trim() || null;
+  data.booking.original_time = data.booking.original_time?.trim() || null;
   data.booking.client_name = data.booking.client_name?.trim() || null;
   if (data.booking.date && /^\d{2}\/\d{2}\/\d{4}$/.test(data.booking.date)) {
     const [d, m, y] = data.booking.date.split('/');
     data.booking.date = `${y}-${m}-${d}`;
   }
+  if (data.booking.original_date && /^\d{2}\/\d{2}\/\d{4}$/.test(data.booking.original_date)) {
+    const [d, m, y] = data.booking.original_date.split('/');
+    data.booking.original_date = `${y}-${m}-${d}`;
+  }
   if (data.booking.time && /^\d{1,2}:\d{2}$/.test(data.booking.time)) {
     const [h, m] = data.booking.time.split(':');
     data.booking.time = `${h?.padStart(2, '0')}:${m}`;
+  }
+  if (data.booking.original_time && /^\d{1,2}:\d{2}$/.test(data.booking.original_time)) {
+    const [h, m] = data.booking.original_time.split(':');
+    data.booking.original_time = `${h?.padStart(2, '0')}:${m}`;
   }
   return { ok: true, data, raw };
 }
