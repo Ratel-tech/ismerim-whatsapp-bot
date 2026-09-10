@@ -152,6 +152,10 @@ whatsapp.onMessage = (msg) => {
   });
 };
 
+whatsapp.onPresence = (jid, presence) => {
+  agent.handlePresence(jid, presence);
+};
+
 function bookingsStatus(jid: string, today: string): { hasFuture: boolean; hasPast: boolean; agendou: boolean } {
   const bookings = store.listBookingsByClient(jid);
   return {

@@ -7,6 +7,7 @@ import makeWASocket, {
   downloadMediaMessage,
   useMultiFileAuthState,
   type WAMessage,
+  type WAPresence,
   type WASocket,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
@@ -102,6 +103,8 @@ export class WhatsAppClient {
   /** QR em PNG base64 (para a página :3081) */
   qr: string | null = null;
   onMessage: ((msg: InboundMessage) => void) | null = null;
+  /** Notifica mudanças de presença (ex.: "digitando...") de contatos individuais. */
+  onPresence: ((jid: string, presence: WAPresence) => void) | null = null;
 
   private sock: WASocket | null = null;
   private qrRaw: string | null = null;
@@ -110,6 +113,7 @@ export class WhatsAppClient {
   private reconnectAttempts = 0;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private chatMap = new Map<string, ChatSummary>();
+  private readonly subscribed = new Set<string>();
 
   constructor(private readonly sessionDir: string = config.sessionDir) {}
 
@@ -257,6 +261,20 @@ export class WhatsAppClient {
     sock.ev.on('chats.delete', (jids) => {
       for (const j of jids) this.chatMap.delete(normalizeJid(j));
     });
+    // Presença ("digitando..."): usada pelo agente para agrupar mensagens picadas.
+    sock.ev.on('presence.update', ({ presences }) => {
+      for (const [jid, data] of Object.entries(presences ?? {})) {
+        if (isGroupJid(jid)) continue;
+        this.onPresence?.(normalizeJid(jid), data.lastKnownPresence);
+      }
+    });
+  }
+
+  /** Assina a presença de um contato (uma vez por JID) para receber "digitando...". */
+  private subscribePresence(jid: string): void {
+    if (this.subscribed.has(jid)) return;
+    this.subscribed.add(jid);
+    void this.sock?.presenceSubscribe(jid).catch(() => undefined);
   }
 
   private handleConnectionUpdate(update: { connection?: string; lastDisconnect?: { error?: Error }; qr?: string }): void {
@@ -292,6 +310,7 @@ export class WhatsAppClient {
       this.qrRaw = null;
       // Limpa o cache de chats ao reconectar; os eventos do Baileys o repovoam.
       this.chatMap.clear();
+      this.subscribed.clear();
       this.setStatus('connected');
       log('info', `Conectado como ${this.phone}`);
       return;
@@ -361,6 +380,7 @@ export class WhatsAppClient {
       if (key.fromMe) continue;
       const jid = key.remoteJid;
       if (!jid || isGroupJid(jid)) continue;
+      this.subscribePresence(normalizeJid(jid));
 
       const audio = audioFromMessage(msg);
       if (audio) {

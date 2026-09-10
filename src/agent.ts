@@ -62,13 +62,22 @@ export interface AgentOptions {
   debounceMs?: number;
   /** Teto (ms) desde o primeiro fragmento de uma rajada, para não esperar indefinidamente. */
   maxWaitMs?: number;
+  /** Tempo (ms) para responder depois que o cliente para de digitar ("paused"). */
+  graceMs?: number;
 }
+
+/** Presença do contato no chat (subconjunto do WAPresence do Baileys). */
+export type TypingPresence = 'composing' | 'recording' | 'paused' | 'available' | 'unavailable';
 
 interface PendingBuffer {
   parts: string[];
   name: string | null;
   timer: NodeJS.Timeout | null;
   firstAt: number;
+  /** O cliente está digitando agora (presence "composing"). */
+  typing: boolean;
+  /** Já recebemos algum sinal de presença (para distinguir do fallback). */
+  sawPresence: boolean;
 }
 
 export class Agent {
@@ -76,11 +85,13 @@ export class Agent {
   private readonly lastTurnAt = new Map<string, number>();
   private readonly debounceMs: number;
   private readonly maxWaitMs: number;
+  private readonly graceMs: number;
   private readonly buffers = new Map<string, PendingBuffer>();
 
   constructor(private readonly opts: AgentOptions) {
-    this.debounceMs = opts.debounceMs ?? 5000;
+    this.debounceMs = opts.debounceMs ?? 2000;
     this.maxWaitMs = opts.maxWaitMs ?? 15000;
+    this.graceMs = opts.graceMs ?? 1000;
   }
 
   async handleInboundMessage(input: { jid: string; text: string; name: string | null }): Promise<void> {
@@ -105,20 +116,38 @@ export class Agent {
     }
 
     // Com agrupamento: acumula os fragmentos e responde após o silêncio.
-    const buf = this.buffers.get(jid) ?? { parts: [], name: null, timer: null, firstAt: Date.now() };
+    const buf = this.buffers.get(jid) ?? { parts: [], name: null, timer: null, firstAt: Date.now(), typing: false, sawPresence: false };
     buf.parts.push(text);
     buf.name = input.name ?? buf.name;
     this.buffers.set(jid, buf);
     this.scheduleFlush(jid);
   }
 
-  /** (Re)agenda o processamento do buffer respeitando o debounce e o teto máximo. */
+  /**
+   * Sinal de presença do contato (ex.: "digitando..."). Enquanto o cliente
+   * digita, o bot segura a resposta; ao parar, responde após `graceMs`.
+   */
+  handlePresence(jid: string, presence: TypingPresence): void {
+    const buf = this.buffers.get(jid);
+    if (!buf) return;
+    if (presence === 'composing' || presence === 'recording') {
+      buf.typing = true;
+    } else {
+      buf.typing = false;
+      buf.sawPresence = true;
+    }
+    this.scheduleFlush(jid);
+  }
+
+  /** (Re)agenda o processamento do buffer respeitando presença, debounce e o teto máximo. */
   private scheduleFlush(jid: string): void {
     const buf = this.buffers.get(jid);
     if (!buf) return;
     if (buf.timer) clearTimeout(buf.timer);
     const elapsed = Date.now() - buf.firstAt;
-    const delay = Math.max(0, Math.min(this.debounceMs, this.maxWaitMs - elapsed));
+    const remainingCap = Math.max(0, this.maxWaitMs - elapsed);
+    const base = buf.typing ? remainingCap : buf.sawPresence ? this.graceMs : this.debounceMs;
+    const delay = Math.min(base, remainingCap);
     const timer = setTimeout(() => {
       buf.timer = null;
       // Se a IA ainda está respondendo, o término do turno reagenda o flush.

@@ -30,7 +30,7 @@ class RecordingProvider {
   }
 }
 
-function makeAgent(provider: RecordingProvider, debounceMs = 5000, maxWaitMs = 15000) {
+function makeAgent(provider: RecordingProvider, debounceMs = 5000, maxWaitMs = 15000, graceMs = 1000) {
   const store = makeStore();
   const sent: { jid: string; text: string }[] = [];
   const agent = new Agent({
@@ -42,6 +42,7 @@ function makeAgent(provider: RecordingProvider, debounceMs = 5000, maxWaitMs = 1
     },
     debounceMs,
     maxWaitMs,
+    graceMs,
   });
   return { store, sent, agent, provider };
 }
@@ -132,5 +133,76 @@ describe('agregação de mensagens picadas', () => {
     await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
 
     expect(sent).toHaveLength(1);
+  });
+});
+
+describe('presence (digitando...)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it('enquanto o cliente digita, segura a resposta', async () => {
+    const provider = new RecordingProvider();
+    const { sent, agent } = makeAgent(provider, 2000, 15000, 1000);
+
+    await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
+    agent.handlePresence(JID, 'composing');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('quando o cliente para de digitar, responde após ~1s', async () => {
+    const provider = new RecordingProvider();
+    const { sent, agent } = makeAgent(provider, 2000, 15000, 1000);
+
+    await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
+    agent.handlePresence(JID, 'composing');
+    await vi.advanceTimersByTimeAsync(500);
+    agent.handlePresence(JID, 'paused');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('sem presença, cai no fallback de 2s', async () => {
+    const provider = new RecordingProvider();
+    const { sent, agent } = makeAgent(provider, 2000, 15000, 1000);
+
+    await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(sent).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('respeita o teto de 15s mesmo com digitação contínua', async () => {
+    const provider = new RecordingProvider();
+    const { sent, agent } = makeAgent(provider, 2000, 15000, 1000);
+
+    await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'João' });
+    agent.handlePresence(JID, 'composing');
+
+    await vi.advanceTimersByTimeAsync(14000);
+    expect(sent).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('presença sem buffer pendente é ignorada', async () => {
+    const provider = new RecordingProvider();
+    const { sent, agent } = makeAgent(provider, 2000, 15000, 1000);
+
+    agent.handlePresence(JID, 'composing');
+    agent.handlePresence(JID, 'paused');
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(sent).toHaveLength(0);
   });
 });
