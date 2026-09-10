@@ -11,6 +11,8 @@ dotenv.config({ path: envFile });
 
 export interface AppConfig {
   port: number;
+  /** Interface de rede do servidor HTTP (127.0.0.1 local; 0.0.0.0 dentro do Docker). */
+  host: string;
   /** Provedor de IA ativo: deepseek | openai | codex | gemini. */
   aiProvider: string;
   /** Chave da API do provedor (AI_API_KEY, com fallback p/ DEEPSEEK_API_KEY). */
@@ -37,6 +39,7 @@ export interface AppConfig {
 /** Configuração em memória; chaves selecionadas podem ser atualizadas em runtime (ver updateEnv). */
 export const config: AppConfig = {
   port: Number(process.env.PORT ?? 3081),
+  host: process.env.HOST ?? '127.0.0.1',
   aiProvider: process.env.AI_PROVIDER ?? 'deepseek',
   aiApiKey: process.env.AI_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? '',
   aiModel: process.env.AI_MODEL ?? process.env.DEEPSEEK_MODEL ?? 'deepseek-chat',

@@ -1,0 +1,15 @@
+node_modules
+dist
+data
+.git
+.github
+.env
+*.log
+chave API.txt
+tests
+scripts
+docs
+vitest.config.ts
+tsconfig.test.json
+Dockerfile
+docker-compose.yml

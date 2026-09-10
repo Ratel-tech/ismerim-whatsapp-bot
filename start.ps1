@@ -7,9 +7,13 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
+# Usa npm.cmd em vez de npm para contornar a Execution Policy do Windows
+# que bloqueia a execução de scripts .ps1 (npm.ps1), mantendo o bot rodando.
+$npm = "npm.cmd"
+
 if (-not (Test-Path "node_modules")) {
     Write-Host "Instalando dependências (primeira execução)..."
-    npm install
+    & $npm install
 }
 
 if (-not (Test-Path ".env")) {
@@ -22,4 +26,4 @@ Write-Host "  Ismerim WhatsApp Bot iniciando..."
 Write-Host "  Página/QR:  http://localhost:3081"
 Write-Host "  (Ctrl+C para encerrar)"
 Write-Host "============================================"
-npm run dev
+& $npm run dev

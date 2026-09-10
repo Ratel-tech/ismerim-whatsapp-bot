@@ -330,7 +330,7 @@ function bindServer(): void {
   };
   server.once('error', onError);
   server.once('listening', onListening);
-  server.listen(bindPort, '127.0.0.1');
+  server.listen(bindPort, config.host);
 }
 
 bindServer();

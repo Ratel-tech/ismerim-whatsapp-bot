@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    image: ismerim-whatsapp-bot:latest
+    container_name: ismerim-bot
+    init: true
+    restart: unless-stopped
+    environment:
+      # Escuta em todas as interfaces para o port mapping funcionar.
+      HOST: 0.0.0.0
+    ports:
+      - "3081:3081"
+    volumes:
+      # Sessão do WhatsApp, banco e logs (persistem entre reinícios).
+      - ./data:/app/data
+      # Catálogo/agente editáveis ao vivo.
+      - ./config:/app/config
+      # O painel grava configurações no .env em runtime.
+      - ./.env:/app/.env
