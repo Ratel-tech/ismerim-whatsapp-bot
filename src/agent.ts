@@ -154,6 +154,15 @@ export class Agent {
     const data = parsed.data;
     let reply = data.reply;
 
+    if (data.booking.requested) {
+      const b = data.booking;
+      log(
+        'info',
+        `Ação de agendamento: ${b.acao} confirmado=${b.confirmed} novo=${b.date ?? '-'} ${b.time ?? '-'}` +
+          (b.original_date ? ` original=${b.original_date} ${b.original_time ?? '-'}` : ''),
+      );
+    }
+
     // Registra observações que o agente julgou úteis sobre o cliente.
     for (const note of data.observations ?? []) {
       if (note?.trim()) this.opts.store.addObservation(jid, note, 'agente');

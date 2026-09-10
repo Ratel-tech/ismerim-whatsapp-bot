@@ -10,7 +10,8 @@ import { loadCatalog, saveCatalog, localDateString } from './catalog.js';
 import { computeFunnel } from './funnel.js';
 import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { toPublicProfissional } from './profissionais.js';
-import { cancelBookingCliente, formatConfirmation, validateAndCreateBooking, validateAndRescheduleBooking } from './bookings.js';
+import { cancelBookingCliente, formatConfirmation, validateAndRescheduleBooking } from './bookings.js';
+import { createBookingFromAgent } from './booking-flow.js';
 import {
   buildCancellationNotification,
   buildNotification,
@@ -38,7 +39,7 @@ const agent = new Agent({
   store,
   sendText: (jid, text) => whatsapp.sendText(jid, text),
   onBookingConfirmed: async (input) => {
-    const outcome = validateAndCreateBooking(store, loadCatalog(), { ...input, serviceName: input.service }, store.listProfissionais());
+    const outcome = createBookingFromAgent(store, loadCatalog(), store.listProfissionais(), input);
     if (!outcome.ok) {
       log('warn', `Agendamento rejeitado (${outcome.code}): ${input.service} ${input.date} ${input.time}`);
       return outcome.userMessage;

@@ -1,7 +1,8 @@
 import { Store } from '../src/store.js';
 import { Agent } from '../src/agent.js';
 import { loadCatalog } from '../src/catalog.js';
-import { formatConfirmation, validateAndCreateBooking } from '../src/bookings.js';
+import { formatConfirmation } from '../src/bookings.js';
+import { createBookingFromAgent } from '../src/booking-flow.js';
 import { buildNotification } from '../src/notifier.js';
 
 const store = new Store('data/db.json');
@@ -16,10 +17,7 @@ const agent = new Agent({
   },
   // mesmo fluxo do index.ts (valida -> salva -> notifica), sem enviar no WhatsApp
   onBookingConfirmed: async (input) => {
-    const outcome = validateAndCreateBooking(store, loadCatalog(), {
-      ...input,
-      serviceName: input.service,
-    });
+    const outcome = createBookingFromAgent(store, loadCatalog(), store.listProfissionais(), input);
     if (!outcome.ok) {
       console.log('REJEITADO:', outcome.code);
       return outcome.userMessage;
