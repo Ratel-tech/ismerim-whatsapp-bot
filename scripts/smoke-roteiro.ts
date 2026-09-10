@@ -11,7 +11,8 @@
 import { Store } from '../src/store.js';
 import { Agent } from '../src/agent.js';
 import { loadCatalog } from '../src/catalog.js';
-import { formatConfirmation, validateAndCreateBooking } from '../src/bookings.js';
+import { formatConfirmation } from '../src/bookings.js';
+import { createBookingFromAgent } from '../src/booking-flow.js';
 import { buildNotification } from '../src/notifier.js';
 
 const FALLBACK_MARKER = 'não consegui processar';
@@ -35,12 +36,13 @@ const sent: { jid: string; text: string }[] = [];
 
 const agent = new Agent({
   store,
+  debounceMs: 0,
   sendText: async (jid, text) => {
     sent.push({ jid, text });
     return true;
   },
   onBookingConfirmed: async (input) => {
-    const outcome = validateAndCreateBooking(store, loadCatalog(), { ...input, serviceName: input.service });
+    const outcome = createBookingFromAgent(store, loadCatalog(), store.listProfissionais(), input);
     if (!outcome.ok) {
       console.log(`   [backend rejeitou: ${outcome.code}]`);
       return outcome.userMessage;

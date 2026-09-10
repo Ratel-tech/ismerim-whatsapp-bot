@@ -9,6 +9,7 @@ const store = new Store('data/db.json');
 const sent: string[] = [];
 const agent = new Agent({
   store,
+  debounceMs: 0,
   sendText: async (_jid, text) => {
     sent.push(text);
     console.log('--- BOT RESPONDEU ---');

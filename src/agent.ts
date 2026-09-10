@@ -55,45 +55,103 @@ export interface AgentOptions {
   onCancelBooking?(input: CancelBookingInput): Promise<string>;
   /** Confirmação de REMARCAÇÃO (backend executa; retorna msg final ao cliente). */
   onRescheduleBooking?(input: RescheduleBookingInput): Promise<string>;
+  /**
+   * Agrupa mensagens picadas: espera este tempo (ms) de silêncio antes de
+   * responder, juntando os fragmentos. `<= 0` desativa (responde na hora).
+   */
+  debounceMs?: number;
+  /** Teto (ms) desde o primeiro fragmento de uma rajada, para não esperar indefinidamente. */
+  maxWaitMs?: number;
+}
+
+interface PendingBuffer {
+  parts: string[];
+  name: string | null;
+  timer: NodeJS.Timeout | null;
+  firstAt: number;
 }
 
 export class Agent {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly lastTurnAt = new Map<string, number>();
+  private readonly debounceMs: number;
+  private readonly maxWaitMs: number;
+  private readonly buffers = new Map<string, PendingBuffer>();
 
-  constructor(private readonly opts: AgentOptions) {}
+  constructor(private readonly opts: AgentOptions) {
+    this.debounceMs = opts.debounceMs ?? 5000;
+    this.maxWaitMs = opts.maxWaitMs ?? 15000;
+  }
 
   async handleInboundMessage(input: { jid: string; text: string; name: string | null }): Promise<void> {
     const { jid, text } = input;
     const client = this.opts.store.upsertClient(jid, input.name);
 
-    // anti-spam: no mínimo 2s entre respostas do mesmo cliente
-    const last = this.lastTurnAt.get(jid) ?? 0;
-    if (Date.now() - last < 2000) return;
-
-    this.opts.store.addMessage(jid, 'cliente', text);
-
-    // Atendimento humano ativo: o bot não responde automaticamente;
-    // o atendente assume manualmente pelo painel (envio de mensagem + observações).
+    // Atendimento humano ativo: registra a mensagem, mas o bot não responde.
     if (this.opts.store.getClient(jid)?.needsHuman) {
       log('info', `Atendimento humano ativo para ${jid}; resposta automática pausada.`);
+      this.opts.store.addMessage(jid, 'cliente', text);
       this.lastTurnAt.set(jid, Date.now());
       return;
     }
 
-    const inFlight = this.inFlight.get(jid);
-    if (inFlight) {
-      log('warn', `Mensagem ignorada (turno anterior em andamento): ${jid}`);
+    // Sem agrupamento: processa imediatamente (com anti-spam de 2s).
+    if (this.debounceMs <= 0) {
+      const last = this.lastTurnAt.get(jid) ?? 0;
+      if (Date.now() - last < 2000) return;
+      this.opts.store.addMessage(jid, 'cliente', text);
+      await this.processTurn(jid, client.name, text);
       return;
     }
 
-    const turn = this.runTurn(jid, client.name, text);
+    // Com agrupamento: acumula os fragmentos e responde após o silêncio.
+    const buf = this.buffers.get(jid) ?? { parts: [], name: null, timer: null, firstAt: Date.now() };
+    buf.parts.push(text);
+    buf.name = input.name ?? buf.name;
+    this.buffers.set(jid, buf);
+    this.scheduleFlush(jid);
+  }
+
+  /** (Re)agenda o processamento do buffer respeitando o debounce e o teto máximo. */
+  private scheduleFlush(jid: string): void {
+    const buf = this.buffers.get(jid);
+    if (!buf) return;
+    if (buf.timer) clearTimeout(buf.timer);
+    const elapsed = Date.now() - buf.firstAt;
+    const delay = Math.max(0, Math.min(this.debounceMs, this.maxWaitMs - elapsed));
+    const timer = setTimeout(() => {
+      buf.timer = null;
+      // Se a IA ainda está respondendo, o término do turno reagenda o flush.
+      if (this.inFlight.has(jid)) return;
+      void this.flushBuffer(jid).catch((err) => log('error', `Erro ao processar mensagens de ${jid}: ${(err as Error).message}`));
+    }, delay);
+    const maybeUnref = timer as unknown as { unref?: () => void };
+    if (typeof maybeUnref.unref === 'function') maybeUnref.unref();
+    buf.timer = timer;
+  }
+
+  /** Junta os fragmentos do buffer e roda um turno com o texto combinado. */
+  private async flushBuffer(jid: string): Promise<void> {
+    const buf = this.buffers.get(jid);
+    if (!buf || buf.parts.length === 0) return;
+    const text = buf.parts.join(' ').replace(/\s+/g, ' ').trim();
+    const name = buf.name;
+    this.buffers.delete(jid);
+    if (!text) return;
+    this.opts.store.addMessage(jid, 'cliente', text);
+    await this.processTurn(jid, name, text);
+  }
+
+  /** Roda um turno com exclusão mútua por cliente e reagenda se houver buffer pendente. */
+  private async processTurn(jid: string, name: string | null, text: string): Promise<void> {
+    const turn = this.runTurn(jid, name, text);
     this.inFlight.set(jid, turn);
     try {
       await turn;
     } finally {
       this.inFlight.delete(jid);
       this.lastTurnAt.set(jid, Date.now());
+      if ((this.buffers.get(jid)?.parts.length ?? 0) > 0) this.scheduleFlush(jid);
     }
   }
 

@@ -36,6 +36,7 @@ function makeContext(
       sent.push({ jid, text });
       return true;
     },
+    debounceMs: 0,
     onBookingConfirmed,
     onTransfer,
     onCancelBooking,
