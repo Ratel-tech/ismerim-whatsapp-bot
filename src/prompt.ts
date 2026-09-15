@@ -1,4 +1,4 @@
-import { formatHorarios, formatPreco, type Catalog } from './catalog.js';
+import { formatHorarios, formatPreco, localDateString, type Catalog } from './catalog.js';
 import type { AgentConfig } from './agent-config.js';
 import type { ProfissionalPublic } from './profissionais.js';
 
@@ -36,15 +36,17 @@ export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts:
     : '';
 
   const bookings = opts.clientBookings ?? [];
+  const hoje = localDateString(now);
   const clientBookingsText = bookings.length
     ? bookings
         .map((b) => {
           const [y, m, d] = b.date.split('-');
           const data = d && m && y ? `${d}/${m}/${y}` : b.date;
-          return `- ${b.service} em ${data} às ${b.time}${b.professionalName ? ` (com ${b.professionalName})` : ''}`;
+          const passado = b.date < hoje;
+          return `- ${b.service} em ${data} às ${b.time}${b.professionalName ? ` (com ${b.professionalName})` : ''} — ${passado ? 'JÁ PASSOU' : 'futuro'}`;
         })
         .join('\n')
-    : '- (nenhum agendamento futuro)';
+    : '- (nenhum agendamento)';
 
   return `Você é o assistente virtual da ${agentCfg.empresa || 'barbearia'} no WhatsApp. Atue como UM VENDEDOR: entenda a necessidade do cliente, faça perguntas, apresente serviços relevantes, use chamadas para ação (ex.: "quer que eu reserve seu horário?") e conduza até a confirmação do agendamento.
 
@@ -73,6 +75,8 @@ ${agentCfg.boas_vindas || '(sem boas-vindas definidas)'}
 7. Responda em português do Brasil, de forma curta e amigável.
 8. O telefone particular de um profissional é privado e fica apenas no backend: nunca peça, informe, sugira ou invente o telefone de um profissional. Trate profissionais apenas pelo nome.
 9. Cancelar/remarcar SOMENTE agendamentos futuros do próprio cliente (listados em "Agendamentos do cliente"). Nunca de terceiros nem agendamentos passados.
+10. Datas anteriores a hoje JÁ ACONTECERAM: agendamentos marcados como "JÁ PASSOU" NÃO estão mais ativos. Nunca diga que um horário passado ainda está reservado; se o cliente falar dele, diga que já passou. A seção "Agendamentos do cliente" é a fonte da verdade — não deduza que algo está agendado pelo histórico da conversa.
+11. Se o cliente JÁ TEM um agendamento e quer mudar o horário (ou o profissional), use acao="remarcar" com original_date/original_time — NUNCA crie um novo agendamento para o mesmo pedido.
 
 ## Observações internas (registro do cliente)
 Sempre que o cliente revelar algo útil de lembrar no próximo atendimento — preferências, restrições, contexto, problema relatado, combinação feita — adicione uma nota curta no array "observations".
@@ -126,7 +130,7 @@ Regras do objeto "booking":
 - Quando o cliente responder de forma afirmativa (ex.: "sim", "isso", "confirmo", "pode", "pode marcar"), trate como confirmação explícita: marque confirmed=true e repita TODOS os campos aplicáveis da ação (acao, service, professional, date, time e, em remarcação, original_date/original_time).
 - Quando confirmado=true, preencha TODOS os campos aplicáveis.
 
-## Agendamentos do cliente (futuros — use para cancelar/remarcar)
+## Agendamentos do cliente (futuros e passados — use para cancelar/remarcar)
 ${clientBookingsText}
 
 ## Cliente atual

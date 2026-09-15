@@ -247,6 +247,23 @@ describe('Agent — fluxo completo com agendamento', () => {
     expect(msg).toContain('Agendamento confirmado pelo cliente.');
   });
 
+  it('contexto do agente inclui agendamento passado marcado como JÁ PASSOU', async () => {
+    const store = makeStore();
+    store.addBooking({ clientJid: JID, clientName: 'Deirdre', service: 'Corte', price: 70, date: '2020-01-01', time: '11:50' });
+    let system = '';
+    const agent = new Agent({
+      store,
+      complete: async (messages) => {
+        system = messages[0]?.content ?? '';
+        return JSON.stringify({ intent: 'conversation', reply: 'ok' });
+      },
+      sendText: async () => true,
+      debounceMs: 0,
+    });
+    await agent.handleInboundMessage({ jid: JID, text: 'oi', name: 'Deirdre' });
+    expect(system).toContain('JÁ PASSOU');
+  });
+
   it('anti-spam: duas mensagens em menos de 2s só geram uma resposta', async () => {
     const provider = new FakeAIProvider([
       JSON.stringify({ intent: 'conversation', reply: 'primeira' }),

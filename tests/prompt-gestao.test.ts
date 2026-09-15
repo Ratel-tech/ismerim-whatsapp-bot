@@ -19,11 +19,39 @@ describe('prompt — agendamentos do cliente (cancelar/remarcar)', () => {
 
   it('sem agendamentos mostra aviso', () => {
     const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, { clientName: 'João', pendingBooking: null, clientBookings: [] });
-    expect(p).toContain('nenhum agendamento futuro');
+    expect(p).toContain('nenhum agendamento');
   });
 
   it('não inclui telefones do cliente nem do profissional', () => {
     const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, { clientName: 'João', pendingBooking: null, clientBookings: bookings });
     expect(p).not.toMatch(/\d{10,}/);
+  });
+
+  it('marca agendamento PASSADO como JÁ PASSOU (não tratar como ativo)', () => {
+    const now = new Date('2026-09-15T12:00:00-03:00');
+    const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, {
+      clientName: 'Deirdre',
+      pendingBooking: null,
+      now,
+      clientBookings: [{ date: '2026-09-12', time: '11:50', service: 'Corte', professionalName: 'GEANI' }],
+    });
+    expect(p).toContain('Corte em 12/09/2026 às 11:50 (com GEANI) — JÁ PASSOU');
+  });
+
+  it('marca agendamento futuro como futuro', () => {
+    const now = new Date('2026-09-15T12:00:00-03:00');
+    const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, {
+      clientName: 'Deirdre',
+      pendingBooking: null,
+      now,
+      clientBookings: [{ date: '2026-09-22', time: '14:30', service: 'Corte', professionalName: 'GEANI' }],
+    });
+    expect(p).toContain('Corte em 22/09/2026 às 14:30 (com GEANI) — futuro');
+    expect(p).not.toContain('(com GEANI) — JÁ PASSOU');
+  });
+
+  it('instrui o agente a não tratar agendamento passado como ativo', () => {
+    const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, { clientName: 'João', pendingBooking: null, clientBookings: [] });
+    expect(p).toContain('JÁ ACONTECERAM');
   });
 });

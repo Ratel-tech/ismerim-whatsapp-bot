@@ -1,5 +1,5 @@
 import { AiError, complete, parseAgentResponse, type ChatMessage } from './ai.js';
-import { loadCatalog, localDateString, resolveService } from './catalog.js';
+import { loadCatalog, resolveService } from './catalog.js';
 import { loadAgentConfig } from './agent-config.js';
 import { buildSystemPrompt } from './prompt.js';
 import type { Store, PendingBooking } from './store.js';
@@ -194,7 +194,8 @@ export class Agent {
       profissionais: this.opts.store.listProfissionaisPublic(),
       clientBookings: this.opts.store
         .listBookingsByClient(jid)
-        .filter((bk) => bk.status === 'confirmado' && bk.date >= localDateString(new Date()))
+        .filter((bk) => bk.status === 'confirmado')
+        .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
         .map((bk) => ({ date: bk.date, time: bk.time, service: bk.service, professionalName: bk.professionalName ?? null })),
     });
 
