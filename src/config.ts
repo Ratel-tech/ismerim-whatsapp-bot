@@ -26,6 +26,8 @@ export interface AppConfig {
   transcribeModel: string;
   adminPhone: string;
   panelToken: string;
+  /** Minutos que o agente fica pausado após um humano responder (0 = não retoma sozinho). */
+  humanPauseMinutes: number;
   dataDir: string;
   dbFile: string;
   logFile: string;
@@ -49,6 +51,7 @@ export const config: AppConfig = {
   transcribeModel: process.env.TRANSCRIBE_MODEL ?? 'whisper-1',
   adminPhone: process.env.ADMIN_PHONE ?? '',
   panelToken: process.env.PANEL_TOKEN ?? '',
+  humanPauseMinutes: Number(process.env.HUMAN_PAUSE_MINUTES ?? 30),
   dataDir: path.join(ROOT, 'data'),
   dbFile: path.join(ROOT, 'data', 'db.json'),
   logFile: path.join(ROOT, 'data', 'logs.txt'),

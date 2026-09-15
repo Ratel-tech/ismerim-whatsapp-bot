@@ -58,6 +58,16 @@ export interface CustomerDetail {
   lastActivityAt: number | null;
   lastText: string | null;
   messageCount: number;
+  /** Papel do contato (identidade admin/profissional/cliente). */
+  papel: 'cliente' | 'admin' | 'profissional';
+  profissionalId: number | null;
+  profissionalNome: string | null;
+}
+
+/** Vínculo de papel definido pelo painel para uma conversa. */
+export interface PapelInput {
+  tipo: 'cliente' | 'admin' | 'profissional';
+  profissionalId?: number;
 }
 
 export interface ConversationDetailPayload {
@@ -139,6 +149,10 @@ export interface HttpDeps {
   deleteObservation(jid: string, index: number): CustomerDetail;
   /** Liga/desliga o atendimento humano (pausa/resume a resposta automática do agente). */
   setHuman(jid: string, on: boolean): CustomerDetail;
+  /** Define o papel do contato (cliente/admin/profissional) para aquela conversa. */
+  setPapel(jid: string, input: PapelInput): CustomerDetail;
+  /** Marca/desmarca um agendamento como feito. Retorna null se não existir. */
+  setBookingFeito(id: number, feito: boolean): Booking | null;
   sendManualMessage(jid: string, text: string): Promise<boolean>;
   getBroadcast(): BroadcastPayload;
   startBroadcast(input: StartBroadcastInput): BroadcastStatus;
@@ -546,13 +560,29 @@ async function refreshWa() {
 function renderBookings(bookings) {
   const tb = document.querySelector('#bookings tbody');
   if (bookings && bookings.length) {
-    tb.innerHTML = bookings.map(b =>
-      '<tr><td>' + esc(b.clientName || '—') + (b.status === 'cancelado' ? ' <span class="badge h">cancelado</span>' : '') + '</td><td>' + esc(b.service) + '</td><td>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</td><td>R$ ' + Number(b.price).toFixed(2).replace('.', ',') + '</td></tr>'
-    ).join('');
+    const n = new Date();
+    const todayStr = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0');
+    tb.innerHTML = bookings.map((b) => {
+      const status = b.status === 'cancelado' ? '<span class="badge h">cancelado</span>'
+        : b.status === 'feito' ? '<span class="badge g">feito</span>'
+        : b.date < todayStr ? '<span class="badge h">passou</span>' : '<span class="badge g">confirmado</span>';
+      const acao = b.status === 'cancelado' ? ''
+        : b.status === 'feito' ? '<button class="btn-mini" data-bk-feito="' + b.id + '" data-bk-to="0">desfazer</button>'
+        : '<button class="btn-mini" data-bk-feito="' + b.id + '" data-bk-to="1">✔ feito</button>';
+      return '<tr><td>' + esc(b.clientName || '—') + '</td><td>' + status + '</td><td>' + esc(b.service) + '</td><td>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</td><td>R$ ' + Number(b.price).toFixed(2).replace('.', ',') + '</td><td>' + acao + '</td></tr>';
+    }).join('');
   } else {
     tb.innerHTML = '<tr><td class="sub">Nenhum agendamento ainda.</td></tr>';
   }
 }
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-bk-feito]');
+  if (!btn) return;
+  const feito = btn.dataset.bkTo === '1';
+  void authedFetch('/api/bookings/' + btn.dataset.bkFeito + '/feito', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feito }) })
+    .then((r) => (r.ok ? refreshWa() : r.json().then((d) => alert('Erro: ' + (d.error || 'falha')))))
+    .catch((err) => alert('Erro: ' + err.message));
+});
 $('btn-connect').addEventListener('click', async () => {
   if (!confirm('Gerar um novo QR Code? A sessão atual será encerrada.')) return;
   await authedFetch('/api/reconnect', { method: 'POST' });
@@ -848,6 +878,9 @@ async function selectConversation(jid) {
     const r = await authedFetch('/api/conversations/' + encodeURIComponent(jid));
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Erro');
+    if (!profs.length) {
+      try { profs = await (await authedFetch('/api/profissionais')).json(); } catch { /* sem profissionais */ }
+    }
     renderChat(d);
     renderDetail(d);
     $('chat-text').disabled = false;
@@ -881,6 +914,14 @@ function renderDetail(d) {
     '<div class="detail-actions"><button class="btn green" id="btn-wa">Abrir WhatsApp</button><button class="btn" id="btn-copy">Copiar</button></div>' +
     '<button class="btn btn-block ' + (c.needsHuman ? 'green' : '') + '" id="btn-human" style="margin-top:2px">' + (c.needsHuman ? '🤖 Voltar para o agente de IA' : '🧑 Atender manualmente (pausar IA)') + '</button>' +
     (c.needsHuman ? '<div class="human-note">Atendimento humano ativo nesta conversa — o agente está pausado. Use o campo abaixo para responder.</div>' : '') +
+    '<div class="sec2">Tipo de contato</div>' +
+    '<div class="row"><select id="papel-sel" style="flex:1">' +
+      [['cliente', '👤 Cliente'], ['admin', '🛡️ Admin'], ['profissional', '💈 Profissional']].map(([t, lbl]) => '<option value="' + t + '"' + (c.papel === t ? ' selected' : '') + '>' + lbl + '</option>').join('') +
+    '</select></div>' +
+    '<div class="row" id="papel-prof-row" style="' + (c.papel === 'profissional' ? '' : 'display:none') + '">' +
+      '<select id="papel-prof" style="flex:1">' + profs.map((p) => '<option value="' + p.id + '"' + (c.profissionalId === p.id ? ' selected' : '') + '>' + esc(p.nome) + (p.ativo ? '' : ' (inativo)') + '</option>').join('') + '</select>' +
+    '</div>' +
+    '<button class="btn green" id="btn-save-papel" style="width:100%;margin:0 0 6px">💾 Salvar tipo de contato</button>' +
     '<div class="sec2">Ficha (planilha)</div>' +
     '<div class="ficha-row"><span class="k">Interesse</span><b>' + esc(c.interesse || '—') + '</b></div>' +
     '<div class="ficha-row"><span class="k">Agendou?</span><b>' + (c.agendou ? 'sim' : 'não') + '</b></div>' +
@@ -894,6 +935,20 @@ function renderDetail(d) {
     '<div style="height:20px"></div>';
   $('btn-wa').addEventListener('click', () => window.open('https://wa.me/' + (c.phone || ''), '_blank'));
   $('btn-copy').addEventListener('click', () => { navigator.clipboard.writeText(c.phone || ''); alert('Copiado'); });
+  $('papel-sel').addEventListener('change', () => {
+    $('papel-prof-row').style.display = $('papel-sel').value === 'profissional' ? '' : 'none';
+  });
+  $('btn-save-papel').addEventListener('click', async () => {
+    try {
+      const tipo = $('papel-sel').value;
+      const body = { tipo };
+      if (tipo === 'profissional') body.profissionalId = Number($('papel-prof').value);
+      const r = await authedFetch('/api/conversations/' + encodeURIComponent(selectedJid) + '/papel', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const dd = await r.json();
+      if (!r.ok) throw new Error(dd.error || 'Erro');
+      renderDetail(dd);
+    } catch (e) { alert('Erro: ' + e.message); }
+  });
   $('btn-human').addEventListener('click', async () => {
     try {
       const r = await authedFetch('/api/conversations/' + encodeURIComponent(selectedJid) + '/human', {
@@ -1225,6 +1280,33 @@ export function createHttpServer(deps: HttpDeps): http.Server {
       const body = (await readBody()) as { on?: boolean };
       deps.setHuman(jid, body.on === true);
       json(200, deps.getConversationDetail(jid));
+      return;
+    }
+    const papelMatch = url.pathname.match(/^\/api\/conversations\/(.+)\/papel$/);
+    if (req.method === 'PUT' && papelMatch) {
+      const jid = decodeURIComponent(papelMatch[1] ?? '');
+      const body = (await readBody()) as { tipo?: string; profissionalId?: number };
+      if (body.tipo !== 'cliente' && body.tipo !== 'admin' && body.tipo !== 'profissional') {
+        json(422, { error: 'Tipo inválido (use cliente, admin ou profissional).' });
+        return;
+      }
+      if (body.tipo === 'profissional' && typeof body.profissionalId !== 'number') {
+        json(422, { error: 'Informe o profissional.' });
+        return;
+      }
+      json(200, deps.setPapel(jid, { tipo: body.tipo, profissionalId: body.profissionalId }));
+      return;
+    }
+    const bookingFeitoMatch = url.pathname.match(/^\/api\/bookings\/(\d+)\/feito$/);
+    if (req.method === 'PUT' && bookingFeitoMatch) {
+      const id = Number(bookingFeitoMatch[1]);
+      const body = (await readBody()) as { feito?: boolean };
+      const booking = deps.setBookingFeito(id, body.feito === true);
+      if (!booking) {
+        json(404, { error: 'Agendamento não encontrado.' });
+        return;
+      }
+      json(200, booking);
       return;
     }
     const obsIndexMatch = url.pathname.match(/^\/api\/conversations\/(.+)\/observations\/(\d+)$/);

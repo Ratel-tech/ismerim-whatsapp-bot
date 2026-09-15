@@ -11,6 +11,11 @@ export type BookingManageOutcome =
   | { ok: true; booking: Booking }
   | { ok: false; code: string; userMessage: string };
 
+/** true quando a data do agendamento é anterior a hoje (já passou). */
+export function isBookingPast(date: string, now: Date = new Date()): boolean {
+  return date < localDateString(now);
+}
+
 function isRealDate(date: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!m) return false;

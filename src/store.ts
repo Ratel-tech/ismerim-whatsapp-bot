@@ -3,6 +3,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
 import { normalizeTelefone, toPublicProfissional, type Profissional } from './profissionais.js';
+import type { Vinculo } from './papeis.js';
 
 export interface StoredClient {
   jid: string;
@@ -13,6 +14,8 @@ export interface StoredClient {
   observations?: ObservationEntry[];
   /** Marcado quando o cliente pede atendimento humano. */
   needsHuman?: boolean;
+  /** Timestamp (ms) de quando o humano assumiu — base para o agente retomar após X minutos. */
+  humanSince?: number | null;
 }
 
 /** Uma observação registrada sobre o cliente, com autor identificado. */
@@ -60,10 +63,12 @@ export interface Booking {
   /** Profissional responsável (opcional; legado não possui). Só o nome/ID, nunca o telefone. */
   professionalId?: number | null;
   professionalName?: string | null;
-  /** Cancelado = mantém histórico, mas não ocupa a vaga. */
-  status: 'confirmado' | 'cancelado';
+  /** Cancelado = mantém histórico, mas não ocupa a vaga. Feito = atendimento realizado. */
+  status: 'confirmado' | 'cancelado' | 'feito';
   createdAt: string;
   updatedAt?: string;
+  /** Quando foi marcado como realizado. */
+  feitoEm?: string | null;
   notifiedAt: string | null;
   /** Quando a notificação ao profissional foi enviada (null/ausente = pendente). */
   profissionalNotificadoEm?: string | null;
@@ -84,10 +89,11 @@ interface Db {
   nextBookingId: number;
   profissionais: Profissional[];
   nextProfissionalId: number;
+  vinculos: Record<string, Vinculo>;
 }
 
 function emptyDb(): Db {
-  return { clients: [], conversations: [], bookings: [], nextBookingId: 1, profissionais: [], nextProfissionalId: 1 };
+  return { clients: [], conversations: [], bookings: [], nextBookingId: 1, profissionais: [], nextProfissionalId: 1, vinculos: {} };
 }
 
 export class Store {
@@ -121,9 +127,10 @@ export class Store {
         // Migração aditiva: db.json antigo não possui profissionais — nunca zera dados existentes.
         if (!Array.isArray(parsed.profissionais)) parsed.profissionais = [];
         if (typeof parsed.nextProfissionalId !== 'number') parsed.nextProfissionalId = 1;
+        if (!parsed.vinculos || typeof parsed.vinculos !== 'object' || Array.isArray(parsed.vinculos)) parsed.vinculos = {};
         // Migração: booking legado sem status é tratado como confirmado (ocupa a vaga).
         for (const b of parsed.bookings) {
-          if (b.status !== 'confirmado' && b.status !== 'cancelado') b.status = 'confirmado';
+          if (b.status !== 'confirmado' && b.status !== 'cancelado' && b.status !== 'feito') b.status = 'confirmado';
         }
         // Migração: observação antiga (string única) vira registro de humano.
         for (const c of parsed.clients) {
@@ -227,6 +234,7 @@ export class Store {
     }
     if (!client) return null;
     client.needsHuman = true;
+    client.humanSince = Date.now();
     this.write();
     return client;
   }
@@ -239,8 +247,13 @@ export class Store {
       client = this.getClient(jid);
     }
     if (!client) return null;
-    if (on) client.needsHuman = true;
-    else delete client.needsHuman;
+    if (on) {
+      client.needsHuman = true;
+      client.humanSince = Date.now();
+    } else {
+      delete client.needsHuman;
+      delete client.humanSince;
+    }
     this.write();
     return client;
   }
@@ -316,6 +329,22 @@ export class Store {
     if (patch.ativo !== undefined) prof.ativo = patch.ativo;
     this.write();
     return prof;
+  }
+
+  // ---------- vínculos de papel (admin/profissional) ----------
+  getVinculo(jid: string): Vinculo | null {
+    return this.db.vinculos[jid] ?? null;
+  }
+
+  listVinculos(): Record<string, Vinculo> {
+    return { ...this.db.vinculos };
+  }
+
+  /** Define (ou remove, com null) o vínculo de papel de um JID. */
+  setVinculo(jid: string, vinculo: Vinculo | null): void {
+    if (vinculo) this.db.vinculos[jid] = vinculo;
+    else delete this.db.vinculos[jid];
+    this.write();
   }
 
   // ---------- conversas ----------
@@ -406,6 +435,28 @@ export class Store {
     const b = this.getBooking(id);
     if (!b || b.status === 'cancelado') return false;
     b.status = 'cancelado';
+    b.updatedAt = new Date().toISOString();
+    this.write();
+    return true;
+  }
+
+  /** Marca um agendamento confirmado como REALIZADO (feito). */
+  markFeito(id: number): boolean {
+    const b = this.getBooking(id);
+    if (!b || b.status !== 'confirmado') return false;
+    b.status = 'feito';
+    b.feitoEm = new Date().toISOString();
+    b.updatedAt = b.feitoEm;
+    this.write();
+    return true;
+  }
+
+  /** Desfaz o "feito", voltando para confirmado. */
+  unmarkFeito(id: number): boolean {
+    const b = this.getBooking(id);
+    if (!b || b.status !== 'feito') return false;
+    b.status = 'confirmado';
+    b.feitoEm = null;
     b.updatedAt = new Date().toISOString();
     this.write();
     return true;

@@ -14,6 +14,7 @@ import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import { config } from './config.js';
 import { log } from './log.js';
+import { senderPhone } from './papeis.js';
 import { audioExtension, isTranscribeEnabled, transcribeAudio } from './stt.js';
 
 const baileysLogger = pino({ level: 'warn' });
@@ -31,6 +32,8 @@ export interface InboundMessage {
   text: string;
   waId: string | null;
   name: string | null;
+  /** Telefone real do remetente, quando disponível (senão null — JID @lid). */
+  phone?: string | null;
 }
 
 /** Tempo mínimo que cada QR fica visível antes de aceitar um novo (evita rotação rápida). */
@@ -395,6 +398,7 @@ export class WhatsAppClient {
         text,
         waId: key.id ?? null,
         name: msg.pushName ?? null,
+        phone: senderPhone(key),
       });
       void this.sock?.readMessages([{ remoteJid: jid, id: key.id ?? '' }]).catch(() => undefined);
     }
@@ -426,7 +430,7 @@ export class WhatsAppClient {
         return;
       }
       log('info', `Áudio transcrito de ${jid}: ${text.slice(0, 80)}`);
-      this.onMessage?.({ jid, text, waId: key.id ?? null, name: msg.pushName ?? null });
+      this.onMessage?.({ jid, text, waId: key.id ?? null, name: msg.pushName ?? null, phone: senderPhone(key) });
     } catch (err) {
       await markRead();
       log('error', `Falha ao transcrever áudio de ${jid}: ${(err as Error).message}`);

@@ -103,6 +103,26 @@ describe('parseAgentResponse', () => {
     expect(r.ok).toBe(false);
   });
 
+  it('captura o telefone do cliente (client_phone) normalizado para dígitos', () => {
+    const r = parseAgentResponse(
+      JSON.stringify({
+        intent: 'booking',
+        reply: 'ok',
+        booking: { requested: true, confirmed: true, acao: 'criar', client_name: 'Maria', client_phone: '(21) 98888-7777', service: 'Corte', date: '2026-09-22', time: '15:00' },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.booking?.client_phone).toBe('21988887777');
+  });
+
+  it('client_phone é null quando não informado', () => {
+    const r = parseAgentResponse('{"intent":"conversation","reply":"Oi"}');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.data.booking?.client_phone).toBeNull();
+  });
+
   it('falha com JSON quebrado', () => {
     const r = parseAgentResponse('{isto não é json');
     expect(r.ok).toBe(false);

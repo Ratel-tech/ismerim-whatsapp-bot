@@ -53,7 +53,7 @@ const bookingSchema = z
   .object({
     requested: z.boolean().default(false),
     confirmed: z.boolean().default(false),
-    acao: z.enum(['criar', 'cancelar', 'remarcar']).default('criar'),
+    acao: z.enum(['criar', 'cancelar', 'remarcar', 'concluir']).default('criar'),
     service: z.string().nullable().default(null),
     professional: z.string().nullable().default(null),
     date: z.string().nullable().default(null),
@@ -61,12 +61,13 @@ const bookingSchema = z
     original_date: z.string().nullable().default(null),
     original_time: z.string().nullable().default(null),
     client_name: z.string().nullable().default(null),
+    client_phone: z.string().nullable().default(null),
   })
   .strict();
 
 const agentResponseSchema = z
   .object({
-    intent: z.enum(['conversation', 'booking', 'transferir', 'finalizar']).default('conversation'),
+    intent: z.enum(['conversation', 'booking', 'transferir', 'finalizar', 'agenda']).default('conversation'),
     reply: z.string().min(1),
     booking: bookingSchema.default({}),
     observations: z.array(z.string()).default([]),
@@ -121,6 +122,7 @@ export function parseAgentResponse(raw: string): ParseResult {
   data.booking.original_date = data.booking.original_date?.trim() || null;
   data.booking.original_time = data.booking.original_time?.trim() || null;
   data.booking.client_name = data.booking.client_name?.trim() || null;
+  data.booking.client_phone = (data.booking.client_phone ?? '').replace(/\D/g, '') || null;
   if (data.booking.date && /^\d{2}\/\d{2}\/\d{4}$/.test(data.booking.date)) {
     const [d, m, y] = data.booking.date.split('/');
     data.booking.date = `${y}-${m}-${d}`;

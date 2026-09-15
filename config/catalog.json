@@ -67,6 +67,12 @@
       "preco": 30,
       "descricao": "Acabamento de cabelo na nuca e laterais",
       "de": null
+    },
+    {
+      "nome": "Corte Infantil",
+      "preco": 70,
+      "descricao": "CORTE INFANTIL — ESPECIALIDADE DA CASA  O corte infantil é uma especialidade da Ismerim Barbearia.  A barbearia possui experiência com atendimento de crianças, incluindo crianças neurodivergentes, buscando proporcionar um atendimento mais acolhedor, paciente e respeitoso",
+      "de": null
     }
   ],
   "promocoes": []

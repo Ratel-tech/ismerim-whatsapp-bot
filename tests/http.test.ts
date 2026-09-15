@@ -18,6 +18,9 @@ const customer = {
   lastActivityAt: null,
   lastText: null,
   messageCount: 0,
+  papel: 'cliente' as const,
+  profissionalId: null,
+  profissionalNome: null,
 };
 
 function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
@@ -51,6 +54,8 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
     updateObservation: () => customer,
     deleteObservation: () => customer,
     setHuman: () => customer,
+    setPapel: () => customer,
+    setBookingFeito: () => null,
     sendManualMessage: async () => true,
     listConversations: () => [],
     getBroadcast: () => ({ settings: { ...DEFAULT_BROADCAST_SETTINGS }, status: { running: false, startedAt: null, finishedAt: null, error: null, total: 0, sent: 0, failed: 0, sentToday: 0 } }),
@@ -165,6 +170,79 @@ describe('http api', () => {
         expect(received).toEqual({ jid: '5511@s.whatsapp.net', on: true });
       },
     );
+  });
+
+  it('PUT /api/conversations/:jid/papel define o papel (admin/profissional/cliente)', async () => {
+    let received: unknown = null;
+    await withServer(
+      makeDeps({ setPapel: (jid, input) => { received = { jid, ...input }; return customer; } }),
+      async (base) => {
+        const r = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/papel`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tipo: 'profissional', profissionalId: 2 }),
+        });
+        expect(r.status).toBe(200);
+        expect(received).toEqual({ jid: '5511@s.whatsapp.net', tipo: 'profissional', profissionalId: 2 });
+      },
+    );
+  });
+
+  it('PUT /api/conversations/:jid/papel valida tipo e profissional (422)', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const bad = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/papel`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'chefe' }),
+      });
+      expect(bad.status).toBe(422);
+      const semProf = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/papel`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'profissional' }),
+      });
+      expect(semProf.status).toBe(422);
+    });
+  });
+
+  it('PUT /api/bookings/:id/feito marca como feito', async () => {
+    const booking = {
+      id: 7,
+      clientJid: '5511999999999@s.whatsapp.net',
+      clientName: 'João',
+      service: 'Corte',
+      price: 70,
+      date: '2026-09-10',
+      time: '11:00',
+      status: 'feito' as const,
+      createdAt: '2026-09-01T00:00:00.000Z',
+      notifiedAt: null,
+    };
+    let received: unknown = null;
+    await withServer(
+      makeDeps({ setBookingFeito: (id, feito) => { received = { id, feito }; return booking; } }),
+      async (base) => {
+        const r = await fetch(`${base}/api/bookings/7/feito`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feito: true }),
+        });
+        expect(r.status).toBe(200);
+        expect(received).toEqual({ id: 7, feito: true });
+        expect(((await r.json()) as { status: string }).status).toBe('feito');
+      },
+    );
+  });
+
+  it('PUT /api/bookings/:id/feito responde 404 quando não existe', async () => {
+    await withServer(makeDeps({ setBookingFeito: () => null }), async (base) => {
+      const r = await fetch(`${base}/api/bookings/999/feito`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feito: true }),
+      });
+      expect(r.status).toBe(404);
+    });
   });
 
   it('PUT /api/conversations/:jid/observations adiciona observação (humano)', async () => {

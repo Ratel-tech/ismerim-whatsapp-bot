@@ -10,6 +10,8 @@ import { loadCatalog, saveCatalog, localDateString } from './catalog.js';
 import { computeFunnel } from './funnel.js';
 import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { toPublicProfissional } from './profissionais.js';
+import { resolverPapel } from './papeis.js';
+import { concluirAgendamento, listarAgenda, professionalNameForCreate } from './operador.js';
 import { cancelBookingCliente, formatConfirmation, validateAndRescheduleBooking } from './bookings.js';
 import { createBookingFromAgent } from './booking-flow.js';
 import {
@@ -19,6 +21,7 @@ import {
   buildTransferRequest,
   flushPendingNotifications,
   flushPendingProfessionalNotifications,
+  formatPhone,
   notifyProfessionalCancellation,
   notifyProfessionalForBooking,
   notifyProfessionalReschedule,
@@ -143,6 +146,78 @@ const agent = new Agent({
       'Até lá! 😉',
     ].join('\n');
   },
+  adminPhone: config.adminPhone,
+  humanPauseMs: config.humanPauseMinutes * 60_000,
+  onListAgenda: async (input) => {
+    log('info', `Operador (${input.papel}) pediu a agenda.`);
+    return listarAgenda(store, { papel: input.papel, profissionalId: input.profissionalId });
+  },
+  onOperatorCreate: async (input) => {
+    const profissionais = store.listProfissionais();
+    const professionalName = professionalNameForCreate(profissionais, {
+      papel: input.papel,
+      profissionalId: input.profissionalId,
+      requestedName: input.professional,
+    });
+    const digits = (input.clientPhone ?? '').replace(/\D/g, '');
+    const clientJid = digits ? `${digits}@s.whatsapp.net` : '';
+    const outcome = createBookingFromAgent(store, loadCatalog(), profissionais, {
+      jid: clientJid,
+      clientName: input.clientName,
+      service: input.service,
+      professional: professionalName,
+      date: input.date,
+      time: input.time,
+    });
+    if (!outcome.ok) {
+      log('warn', `Agendamento pelo operador rejeitado (${outcome.code}): ${input.clientName} | ${input.service} ${input.date} ${input.time}`);
+      return outcome.userMessage;
+    }
+    const booking = outcome.booking;
+    log('info', `Agendamento criado pelo operador #${booking.id}: ${booking.clientName} | ${booking.service} | ${booking.date} ${booking.time}`);
+
+    if (config.adminPhone) {
+      const sent = await whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, buildNotification(booking));
+      if (sent) store.markNotified(booking.id);
+      else log('warn', 'WhatsApp desconectado; agendamento do operador não notificado ao ADMIN.');
+    }
+    if (booking.professionalId) {
+      if (input.papel === 'profissional' && booking.professionalId === input.profissionalId) {
+        // O próprio profissional criou: não notifica a si mesmo (evita reenvio no flush).
+        store.markProfissionalNotificado(booking.id);
+      } else {
+        await notifyProfessionalForBooking({ store, booking, send: (jid, text) => whatsapp.sendText(jid, text) });
+      }
+    }
+
+    const [y, m, d] = booking.date.split('-');
+    return [
+      '✅ Agendamento criado!',
+      '',
+      `👤 Cliente: ${booking.clientName ?? '—'}`,
+      ...(booking.clientJid ? [`📱 Telefone: ${formatPhone(booking.clientJid)}`] : []),
+      `✂️ Serviço: ${booking.service}`,
+      `📅 Data: ${d}/${m}/${y} às ${booking.time}`,
+      `${booking.professionalName ? `💈 Profissional: ${booking.professionalName}` : ''}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  },
+  onMarkDone: async (input) => {
+    const out = concluirAgendamento(store, {
+      papel: input.papel,
+      profissionalId: input.profissionalId,
+      date: input.date,
+      time: input.time,
+      service: input.service,
+    });
+    if (!out.ok) {
+      log('warn', `Marcar como feito rejeitado (${out.code}): ${input.date} ${input.time}`);
+      return out.message;
+    }
+    log('info', `Agendamento #${out.booking?.id} marcado como feito pelo operador.`);
+    return out.message;
+  },
 });
 
 whatsapp.onMessage = (msg) => {
@@ -217,6 +292,13 @@ function conversationDetail(jid: string): ConversationDetailPayload {
   const bookings = store.listBookingsByClient(jid);
   const interesse = store.getPendingBooking(jid)?.service ?? bookings.at(-1)?.service ?? null;
   const last = messages.at(-1);
+  const papelResolvido = resolverPapel({
+    jid,
+    phone: null,
+    adminPhone: config.adminPhone,
+    profissionais: store.listProfissionais(),
+    vinculos: store.listVinculos(),
+  });
   return {
     client: {
       jid,
@@ -231,6 +313,9 @@ function conversationDetail(jid: string): ConversationDetailPayload {
       lastActivityAt: last ? new Date(last.at).getTime() : chat?.lastActivityAt ?? null,
       lastText: last?.content ?? null,
       messageCount: messages.length,
+      papel: papelResolvido.papel,
+      profissionalId: papelResolvido.profissionalId,
+      profissionalNome: papelResolvido.profissionalNome,
     },
     messages,
     bookings,
@@ -290,9 +375,26 @@ const server = createHttpServer({
     store.setHuman(jid, on);
     return conversationDetail(jid).client;
   },
+  setPapel: (jid, input) => {
+    if (input.tipo === 'cliente') store.setVinculo(jid, null);
+    else if (input.tipo === 'admin') store.setVinculo(jid, { tipo: 'admin' });
+    else store.setVinculo(jid, { tipo: 'profissional', profissionalId: input.profissionalId });
+    return conversationDetail(jid).client;
+  },
+  setBookingFeito: (id, feito) => {
+    const existing = store.getBooking(id);
+    if (!existing) return null;
+    if (feito) store.markFeito(id);
+    else store.unmarkFeito(id);
+    return store.getBooking(id);
+  },
   sendManualMessage: async (jid, text) => {
     const ok = await whatsapp.sendText(jid, text);
-    if (ok) store.addMessage(jid, 'bot', text);
+    if (ok) {
+      store.addMessage(jid, 'bot', text);
+      // Atendente respondeu manualmente: pausa o agente (retoma após HUMAN_PAUSE_MINUTES).
+      store.setHuman(jid, true);
+    }
     return ok;
   },
   getBroadcast: () => ({ settings: broadcaster.getSettings(), status: broadcaster.status() }),

@@ -19,18 +19,17 @@ export function formatPhone(phone: string): string {
  */
 export function buildNotification(booking: Booking): string {
   const [y, m, d] = booking.date.split('-');
-  return [
-    '📅 NOVO AGENDAMENTO',
-    '',
-    `Cliente: ${booking.clientName ?? '—'}`,
-    `Telefone: ${formatPhone(booking.clientJid)}`,
+  const lines = ['📅 NOVO AGENDAMENTO', '', `Cliente: ${booking.clientName ?? '—'}`];
+  if (booking.clientJid) lines.push(`Telefone: ${formatPhone(booking.clientJid)}`);
+  lines.push(
     `Serviço: ${booking.service}`,
     `Data: ${d}/${m}/${y}`,
     `Horário: ${booking.time}`,
     `Valor: ${formatPreco(booking.price)}`,
     '',
     'Agendamento confirmado pelo cliente.',
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 /** Aviso ao dono quando um cliente pede para falar com um atendente humano. */
@@ -139,7 +138,7 @@ export function buildCancellationNotification(booking: Booking, includeClientPho
     '',
     `Cliente: ${booking.clientName ?? '—'}`,
   ];
-  if (includeClientPhone) lines.push(`Telefone: ${formatPhone(booking.clientJid)}`);
+  if (includeClientPhone && booking.clientJid) lines.push(`Telefone: ${formatPhone(booking.clientJid)}`);
   lines.push(
     `Serviço: ${booking.service}`,
     `Data: ${fmtData(booking.date)}`,
@@ -158,7 +157,7 @@ export function buildRescheduleNotification(booking: Booking, from: { date: stri
     '',
     `Cliente: ${booking.clientName ?? '—'}`,
   ];
-  if (includeClientPhone) lines.push(`Telefone: ${formatPhone(booking.clientJid)}`);
+  if (includeClientPhone && booking.clientJid) lines.push(`Telefone: ${formatPhone(booking.clientJid)}`);
   lines.push(
     `Serviço: ${booking.service}`,
     `De: ${fmtData(from.date)} às ${from.time}`,

@@ -54,4 +54,10 @@ describe('prompt — agendamentos do cliente (cancelar/remarcar)', () => {
     const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, { clientName: 'João', pendingBooking: null, clientBookings: [] });
     expect(p).toContain('JÁ ACONTECERAM');
   });
+
+  it('instrui a NÃO falar preços logo de cara (só quando o cliente perguntar)', () => {
+    const p = buildSystemPrompt(catalog, DEFAULT_AGENT_CONFIG, { clientName: 'João', pendingBooking: null, clientBookings: [] });
+    expect(p).toContain('NÃO informe preços logo de cara');
+    expect(p).toContain('só fale preços quando o cliente perguntar');
+  });
 });

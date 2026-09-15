@@ -35,6 +35,13 @@ describe('notifier', () => {
     expect(msg.replace(/\u00a0/g, ' ')).toContain('Valor: R$ 59,90');
     expect(msg).toContain('Agendamento confirmado pelo cliente.');
   });
+
+  it('omite o telefone quando o agendamento foi criado por operador (sem telefone de cliente)', () => {
+    const msg = buildNotification({ ...booking, clientJid: '' });
+    expect(msg).not.toContain('Telefone:');
+    expect(msg).toContain('Cliente: João');
+    expect(msg).toContain('Serviço: Corte + Barba');
+  });
 });
 
 describe('buildTransferRequest', () => {
