@@ -38,6 +38,14 @@ export interface RescheduleBookingInput {
   originalTime: string;
 }
 
+export interface ConfirmBookingInput {
+  jid: string;
+  clientName: string | null;
+  service: string | null;
+  date: string;
+  time: string;
+}
+
 export interface ListAgendaInput {
   jid: string;
   papel: 'admin' | 'profissional';
@@ -83,6 +91,8 @@ export interface AgentOptions {
   onCancelBooking?(input: CancelBookingInput): Promise<string>;
   /** Confirmação de REMARCAÇÃO (backend executa; retorna msg final ao cliente). */
   onRescheduleBooking?(input: RescheduleBookingInput): Promise<string>;
+  /** Confirmação de PRESENÇA do cliente (resposta ao lembrete). */
+  onConfirmBooking?(input: ConfirmBookingInput): Promise<string>;
   /** Telefone do ADMIN (para identificar o papel de quem fala). */
   adminPhone?: string;
   /** Operador (admin/barbeiro) pediu para VER os agendamentos. */
@@ -331,8 +341,8 @@ export class Agent {
       this.opts.onTransfer?.({ jid, clientName });
     } else if (data.booking.requested) {
       const b = data.booking;
-      if (b.acao === 'cancelar' || b.acao === 'remarcar') {
-        // Ações de gestão (cancelar/remarcar): só executam no backend após confirmação.
+      if (b.acao === 'cancelar' || b.acao === 'remarcar' || b.acao === 'confirmar') {
+        // Ações de gestão (cancelar/remarcar/confirmar): só executam no backend após confirmação.
         this.opts.store.setPendingBooking(jid, null);
         if (!b.confirmed) {
           // Turno de pergunta/confirmação: mantém o texto do modelo.
@@ -342,6 +352,12 @@ export class Agent {
             : this.opts.onCancelBooking
               ? await this.opts.onCancelBooking({ jid, clientName: b.client_name ?? clientName, service: b.service, date: b.date, time: b.time })
               : 'Tudo bem, seu agendamento foi cancelado. ✅';
+        } else if (b.acao === 'confirmar') {
+          reply = !b.date || !b.time
+            ? 'Qual agendamento você quer confirmar? Pode me dizer o dia e o horário? 🙂'
+            : this.opts.onConfirmBooking
+              ? await this.opts.onConfirmBooking({ jid, clientName: b.client_name ?? clientName, service: b.service, date: b.date, time: b.time })
+              : 'Presença confirmada! ✅';
         } else {
           reply = !(b.date && b.time && b.original_date && b.original_time)
             ? 'Claro! Me confirma para qual dia e horário você quer remarcar? 🙂'

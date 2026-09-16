@@ -53,7 +53,7 @@ const bookingSchema = z
   .object({
     requested: z.boolean().default(false),
     confirmed: z.boolean().default(false),
-    acao: z.enum(['criar', 'cancelar', 'remarcar', 'concluir']).default('criar'),
+    acao: z.enum(['criar', 'cancelar', 'remarcar', 'concluir', 'confirmar']).default('criar'),
     service: z.string().nullable().default(null),
     professional: z.string().nullable().default(null),
     date: z.string().nullable().default(null),

@@ -256,6 +256,32 @@ export function validateAndRescheduleBooking(
   return { ok: true, booking };
 }
 
+/**
+ * Confirma presença de um agendamento FUTURO do próprio cliente (resposta ao lembrete).
+ */
+export function confirmBookingCliente(
+  store: Store,
+  input: { jid: string; date: string; time: string },
+): BookingManageOutcome {
+  const hoje = localDateString(new Date());
+  const booking =
+    store
+      .listBookingsByClient(input.jid)
+      .find((b) => b.status === 'confirmado' && b.date === input.date && b.time === input.time) ?? null;
+  if (!booking) {
+    return {
+      ok: false,
+      code: 'not_found',
+      userMessage: 'Não encontrei esse agendamento para confirmar. Pode me dizer o dia e o horário?',
+    };
+  }
+  if (booking.date < hoje) {
+    return { ok: false, code: 'past_booking', userMessage: 'Esse agendamento já passou. Quer marcar um novo horário?' };
+  }
+  store.markClientConfirmed(booking.id);
+  return { ok: true, booking };
+}
+
 export function formatConfirmation(booking: Booking): string {
   const [y, m, d] = booking.date.split('-');
   return [

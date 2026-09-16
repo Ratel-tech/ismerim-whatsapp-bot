@@ -12,10 +12,12 @@ import { loadAgentConfig, saveAgentConfig } from './agent-config.js';
 import { toPublicProfissional } from './profissionais.js';
 import { resolverPapel } from './papeis.js';
 import { concluirAgendamento, listarAgenda, professionalNameForCreate } from './operador.js';
-import { cancelBookingCliente, formatConfirmation, validateAndRescheduleBooking } from './bookings.js';
+import { cancelBookingCliente, confirmBookingCliente, formatConfirmation, validateAndRescheduleBooking } from './bookings.js';
 import { createBookingFromAgent } from './booking-flow.js';
 import {
   buildCancellationNotification,
+  buildClientConfirmationNotification,
+  buildClientReminder,
   buildNotification,
   buildRescheduleNotification,
   buildTransferRequest,
@@ -23,6 +25,7 @@ import {
   flushPendingProfessionalNotifications,
   formatPhone,
   notifyProfessionalCancellation,
+  notifyProfessionalConfirmation,
   notifyProfessionalForBooking,
   notifyProfessionalReschedule,
 } from './notifier.js';
@@ -148,6 +151,30 @@ const agent = new Agent({
   },
   adminPhone: config.adminPhone,
   humanPauseMs: config.humanPauseMinutes * 60_000,
+  onConfirmBooking: async (input) => {
+    const out = confirmBookingCliente(store, { jid: input.jid, date: input.date, time: input.time });
+    if (!out.ok) {
+      log('warn', `Confirmação rejeitada (${out.code}): ${input.date} ${input.time}`);
+      return out.userMessage;
+    }
+    const b = out.booking;
+    log('info', `Presença confirmada pelo cliente #${b.id}: ${b.clientName} | ${b.service} | ${b.date} ${b.time}`);
+    if (config.adminPhone) {
+      const sent = await whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, buildClientConfirmationNotification(b));
+      if (!sent) log('warn', 'WhatsApp desconectado; confirmação do cliente não notificada ao ADMIN.');
+    } else {
+      log('warn', 'ADMIN_PHONE não configurado — confirmação do cliente não notificada ao ADMIN.');
+    }
+    await notifyProfessionalConfirmation({ store, booking: b, send: (jid, text) => whatsapp.sendText(jid, text) });
+    return [
+      '✅ Presença confirmada!',
+      '',
+      `✂️ ${b.service}`,
+      `📅 ${b.date.split('-').reverse().join('/')} às ${b.time}`,
+      '',
+      'Até logo! 😉',
+    ].join('\n');
+  },
   onListAgenda: async (input) => {
     log('info', `Operador (${input.papel}) pediu a agenda.`);
     return listarAgenda(store, { papel: input.papel, profissionalId: input.profissionalId });
@@ -459,6 +486,27 @@ setInterval(() => {
     send: (jid, text) => whatsapp.sendText(jid, text),
   }).catch((err) => log('error', `Falha ao reenviar notificações ao profissional: ${(err as Error).message}`));
 }, 60_000);
+
+// Lembrete ao cliente ~N minutos antes do agendamento (padrão 2h).
+if (config.reminderMinutesBefore > 0) {
+  const enviarLembretes = async (): Promise<void> => {
+    if (!whatsapp.isConnected()) return;
+    const due = store.listBookingsDueForReminder(Date.now(), config.reminderMinutesBefore * 60_000);
+    for (const b of due) {
+      const ok = await whatsapp.sendText(b.clientJid, buildClientReminder(b));
+      if (ok) {
+        store.markReminded(b.id);
+        log('info', `Lembrete enviado ao cliente (booking #${b.id}).`);
+      } else {
+        log('warn', `Falha ao enviar lembrete (booking #${b.id}); tentará de novo.`);
+      }
+    }
+  };
+  setInterval(() => {
+    void enviarLembretes().catch((err) => log('error', `Falha nos lembretes: ${(err as Error).message}`));
+  }, 5 * 60_000);
+  log('info', `Lembretes de agendamento ativos: ${config.reminderMinutesBefore} min antes.`);
+}
 
 function shutdown(signal: string): void {
   log('info', `Encerrando (${signal})...`);

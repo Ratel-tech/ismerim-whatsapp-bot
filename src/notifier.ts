@@ -128,6 +128,32 @@ function fmtData(date: string): string {
   return d && m && y ? `${d}/${m}/${y}` : date;
 }
 
+/** Lembrete enviado AO CLIENTE ~2h antes, pedindo confirmação de presença. */
+export function buildClientReminder(booking: Booking): string {
+  return [
+    '⏰ Lembrete do seu agendamento:',
+    '',
+    `✂️ Serviço: ${booking.service}`,
+    `📅 Data: ${fmtData(booking.date)} às ${booking.time}`,
+    ...(booking.professionalName ? [`💈 Profissional: ${booking.professionalName}`] : []),
+    '',
+    'Podemos confirmar sua presença? Responda *SIM* para confirmar ou *CANCELAR* para cancelar.',
+  ].join('\n');
+}
+
+/** Aviso de que o cliente confirmou presença. `includeClientPhone` p/ ADMIN; false p/ profissional. */
+export function buildClientConfirmationNotification(booking: Booking, includeClientPhone = true): string {
+  return [
+    '✅ CLIENTE CONFIRMOU PRESENÇA',
+    '',
+    `Cliente: ${booking.clientName ?? '—'}`,
+    ...(includeClientPhone && booking.clientJid ? [`Telefone: ${formatPhone(booking.clientJid)}`] : []),
+    `Serviço: ${booking.service}`,
+    `Data: ${fmtData(booking.date)} às ${booking.time}`,
+    ...(booking.professionalName ? [`Profissional: ${booking.professionalName}`] : []),
+  ].join('\n');
+}
+
 /**
  * Notificação de CANCELAMENTO (backend). Com telefone do cliente quando
  * destinada ao ADMIN; sem qualquer telefone quando destinada ao profissional.
@@ -150,8 +176,7 @@ export function buildCancellationNotification(booking: Booking, includeClientPho
   return lines.join('\n');
 }
 
-/** Notificação de REMARCAÇÃO (backend). `from` = horário anterior. */
-export function buildRescheduleNotification(booking: Booking, from: { date: string; time: string }, includeClientPhone = true): string {
+/** Notificação de REMARCAÇÃO (backend). `from` = horário anterior. */export function buildRescheduleNotification(booking: Booking, from: { date: string; time: string }, includeClientPhone = true): string {
   const lines = [
     '🔄 AGENDAMENTO REMARCADO',
     '',
@@ -197,6 +222,15 @@ export async function notifyProfessionalReschedule(deps: { store: Store; booking
   if (!target) return false;
   const ok = await deps.send(`${target.telefone}@s.whatsapp.net`, buildRescheduleNotification(deps.booking, deps.from, false)).catch(() => false);
   if (!ok) log('warn', `Falha ao notificar remarcação ao profissional "${target.nome}" (booking #${deps.booking.id}).`);
+  return ok;
+}
+
+/** Envia ao profissional o aviso de que o cliente CONFIRMOU presença (best-effort). */
+export async function notifyProfessionalConfirmation(deps: { store: Store; booking: Booking; send: (jid: string, text: string) => Promise<boolean> }): Promise<boolean> {
+  const target = resolveProfessionalTarget(deps.store, deps.booking);
+  if (!target) return false;
+  const ok = await deps.send(`${target.telefone}@s.whatsapp.net`, buildClientConfirmationNotification(deps.booking, false)).catch(() => false);
+  if (!ok) log('warn', `Falha ao notificar confirmação ao profissional "${target.nome}" (booking #${deps.booking.id}).`);
   return ok;
 }
 

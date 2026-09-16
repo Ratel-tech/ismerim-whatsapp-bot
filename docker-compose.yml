@@ -11,7 +11,7 @@ services:
     ports:
       - "3081:3081"
     volumes:
-      # Sessão do WhatsApp, banco e logs (persistem entre reinícios).
+      # Banco (db.json), sessão do WhatsApp e logs — dentro do projeto, em ./data.
       - ./data:/app/data
       # Catálogo/agente editáveis ao vivo.
       - ./config:/app/config

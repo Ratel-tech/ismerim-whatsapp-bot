@@ -9,6 +9,9 @@ const envFile = path.join(ROOT, '.env');
 
 dotenv.config({ path: envFile });
 
+/** Pasta de dados (banco db.json, sessão do WhatsApp, logs). Pode ficar fora do projeto via DATA_DIR. */
+const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
+
 export interface AppConfig {
   port: number;
   /** Interface de rede do servidor HTTP (127.0.0.1 local; 0.0.0.0 dentro do Docker). */
@@ -28,6 +31,8 @@ export interface AppConfig {
   panelToken: string;
   /** Minutos que o agente fica pausado após um humano responder (0 = não retoma sozinho). */
   humanPauseMinutes: number;
+  /** Minutos de antecedência do lembrete ao cliente (padrão 120 = 2h; 0 = desliga). */
+  reminderMinutesBefore: number;
   dataDir: string;
   dbFile: string;
   logFile: string;
@@ -52,14 +57,15 @@ export const config: AppConfig = {
   adminPhone: process.env.ADMIN_PHONE ?? '',
   panelToken: process.env.PANEL_TOKEN ?? '',
   humanPauseMinutes: Number(process.env.HUMAN_PAUSE_MINUTES ?? 30),
-  dataDir: path.join(ROOT, 'data'),
-  dbFile: path.join(ROOT, 'data', 'db.json'),
-  logFile: path.join(ROOT, 'data', 'logs.txt'),
+  reminderMinutesBefore: Number(process.env.REMINDER_MINUTES_BEFORE ?? 120),
+  dataDir,
+  dbFile: path.join(dataDir, 'db.json'),
+  logFile: path.join(dataDir, 'logs.txt'),
   catalogFile: path.join(ROOT, 'config', 'catalog.json'),
   agentFile: path.join(ROOT, 'config', 'agent.json'),
-  sessionDir: path.join(ROOT, 'data', 'sessions'),
+  sessionDir: path.join(dataDir, 'sessions'),
   broadcastFile: path.join(ROOT, 'config', 'broadcast.json'),
-  broadcastStateFile: path.join(ROOT, 'data', 'broadcast-state.json'),
+  broadcastStateFile: path.join(dataDir, 'broadcast-state.json'),
 };
 
 /** Chaves cujo valor salvo no .env também é refletido em memória (sem reiniciar). */

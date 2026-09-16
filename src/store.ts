@@ -69,6 +69,10 @@ export interface Booking {
   updatedAt?: string;
   /** Quando foi marcado como realizado. */
   feitoEm?: string | null;
+  /** Quando o lembrete (2h antes) foi enviado ao cliente. */
+  remindedAt?: string | null;
+  /** Quando o cliente confirmou presença pelo WhatsApp. */
+  confirmedByClientAt?: string | null;
   notifiedAt: string | null;
   /** Quando a notificação ao profissional foi enviada (null/ausente = pendente). */
   profissionalNotificadoEm?: string | null;
@@ -407,7 +411,7 @@ export class Store {
   }
 
   // ---------- agendamentos ----------
-  addBooking(input: Omit<Booking, 'id' | 'createdAt' | 'notifiedAt' | 'profissionalNotificadoEm' | 'status' | 'updatedAt'>): Booking {
+  addBooking(input: Omit<Booking, 'id' | 'createdAt' | 'notifiedAt' | 'profissionalNotificadoEm' | 'status' | 'updatedAt' | 'remindedAt' | 'confirmedByClientAt'>): Booking {
     const booking: Booking = {
       ...input,
       id: this.db.nextBookingId++,
@@ -415,6 +419,8 @@ export class Store {
       createdAt: new Date().toISOString(),
       notifiedAt: null,
       profissionalNotificadoEm: null,
+      remindedAt: null,
+      confirmedByClientAt: null,
     };
     this.db.bookings.push(booking);
     this.write();
@@ -505,5 +511,36 @@ export class Store {
       b.profissionalNotificadoEm = new Date().toISOString();
       this.write();
     }
+  }
+
+  /** Marca que o lembrete (2h antes) foi enviado ao cliente. */
+  markReminded(id: number): boolean {
+    const b = this.getBooking(id);
+    if (!b) return false;
+    b.remindedAt = new Date().toISOString();
+    this.write();
+    return true;
+  }
+
+  /** Marca que o cliente confirmou presença pelo WhatsApp. */
+  markClientConfirmed(id: number): boolean {
+    const b = this.getBooking(id);
+    if (!b) return false;
+    b.confirmedByClientAt = new Date().toISOString();
+    this.write();
+    return true;
+  }
+
+  /**
+   * Agendamentos confirmados que vencem dentro da janela (ex.: 2h) e ainda não
+   * receberam lembrete. Ignora passados, cancelados/feitos, já lembrados e sem
+   * contato do cliente.
+   */
+  listBookingsDueForReminder(now: number = Date.now(), windowMs: number): Booking[] {
+    return this.db.bookings.filter((b) => {
+      if (b.status !== 'confirmado' || !b.clientJid || b.remindedAt) return false;
+      const appt = new Date(`${b.date}T${b.time}:00`).getTime();
+      return Number.isFinite(appt) && appt > now && appt - now <= windowMs;
+    });
   }
 }

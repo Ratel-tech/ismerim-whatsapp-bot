@@ -73,7 +73,20 @@
       "preco": 70,
       "descricao": "CORTE INFANTIL — ESPECIALIDADE DA CASA  O corte infantil é uma especialidade da Ismerim Barbearia.  A barbearia possui experiência com atendimento de crianças, incluindo crianças neurodivergentes, buscando proporcionar um atendimento mais acolhedor, paciente e respeitoso",
       "de": null
+    },
+    {
+      "nome": "Corte e Barba Premium ",
+      "preco": 180,
+      "descricao": "Corte + barba premium com hidratação completa",
+      "de": null
     }
   ],
-  "promocoes": []
+  "promocoes": [
+    {
+      "nome": "Corte e Barba Premium",
+      "preco": 119,
+      "de": 180,
+      "descricao": "com hidratação completa"
+    }
+  ]
 }

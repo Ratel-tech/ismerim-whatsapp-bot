@@ -12,16 +12,21 @@ export interface PromptOptions {
   now?: Date;
 }
 
-export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts: PromptOptions): string {
-  const now = opts.now ?? new Date();
+/** Encurta descrições longas para não inflar o prompt (economia de tokens). */
+function shortDesc(desc: string | null | undefined, max = 140): string {
+  const d = (desc ?? '').trim();
+  return d.length > max ? `${d.slice(0, max).trimEnd()}…` : d;
+}
+
+export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts: PromptOptions): string {  const now = opts.now ?? new Date();
   const today = now.toLocaleDateString('pt-BR');
 
   const servicos = catalog.servicos.length
-    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}${s.descricao ? ` (${s.descricao})` : ''}`).join('\n')
+    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}${s.descricao ? ` (${shortDesc(s.descricao)})` : ''}`).join('\n')
     : '- (nenhum serviço cadastrado)';
 
   const promocoes = catalog.promocoes.length
-    ? catalog.promocoes.map((p) => `- ${p.nome} — ${formatPreco(p.preco)}${p.de ? ` (de ${formatPreco(p.de)})` : ''}${p.descricao ? ` — ${p.descricao}` : ''}`).join('\n')
+    ? catalog.promocoes.map((p) => `- ${p.nome} — ${formatPreco(p.preco)}${p.de ? ` (de ${formatPreco(p.de)})` : ''}${p.descricao ? ` — ${shortDesc(p.descricao)}` : ''}`).join('\n')
     : '- (nenhuma promoção vigente)';
 
   const ativos = (opts.profissionais ?? []).filter((p) => p.ativo);
@@ -96,9 +101,6 @@ ${profissionais}
 ## Horário de funcionamento
 ${formatHorarios(catalog)}
 
-## Data atual
-Hoje é ${today}. Calcule datas futuras a partir desta data. Nunca use datas passadas. Quando o cliente disser "hoje", "amanhã", "sábado" etc., converta para YYYY-MM-DD usando esta data como referência.
-
 ## Formato de saída OBRIGATÓRIO
 Responda SEMPRE com um único objeto JSON (sem markdown, sem texto fora do JSON):
 {
@@ -108,7 +110,7 @@ Responda SEMPRE com um único objeto JSON (sem markdown, sem texto fora do JSON)
   "booking": {
     "requested": false,
     "confirmed": false,
-    "acao": "criar | cancelar | remarcar",
+    "acao": "criar | cancelar | remarcar | confirmar",
     "service": null,
     "professional": null,
     "date": "YYYY-MM-DD ou null",
@@ -125,11 +127,15 @@ Regras do objeto "booking":
 - acao="criar" (padrão): criar novo agendamento.
 - acao="cancelar": o cliente quer CANCELAR um agendamento FUTURO dele listado em "Agendamentos do cliente". Preencha date/time (e service, se souber) com o horário A SER CANCELADO; original_date/original_time ficam null.
 - acao="remarcar": o cliente quer REMARCAR. date/time são o NOVO horário desejado e original_date/original_time são o dia/horário ATUAIS do agendamento a ser remarcado (listado em "Agendamentos do cliente").
+- acao="confirmar": o cliente está CONFIRMANDO PRESENÇA (ex.: respondeu "sim" ao lembrete do agendamento). Preencha date/time do agendamento confirmado (use o próximo agendamento futuro listado em "Agendamentos do cliente").
 - service deve ser o nome EXATO de um serviço do catálogo. date/original_date no formato YYYY-MM-DD e time/original_time HH:MM, dentro do horário de funcionamento.
 - professional deve ser o nome EXATO de um profissional listado em "Profissionais disponíveis", ou null se o cliente não escolher um. Você PODE perguntar com qual profissional o cliente quer agendar (ex.: "com o Juan ou com a Geani?"), mas nunca invente nomes.
 - NUNCA cancele ou remaque um agendamento que não esteja na lista "Agendamentos do cliente" (só futuros e do próprio cliente).
 - Quando o cliente responder de forma afirmativa (ex.: "sim", "isso", "confirmo", "pode", "pode marcar"), trate como confirmação explícita: marque confirmed=true e repita TODOS os campos aplicáveis da ação (acao, service, professional, date, time e, em remarcação, original_date/original_time).
 - Quando confirmado=true, preencha TODOS os campos aplicáveis.
+
+## Data atual
+Hoje é ${today}. Calcule datas futuras a partir desta data. Nunca use datas passadas. Quando o cliente disser "hoje", "amanhã", "sábado" etc., converta para YYYY-MM-DD usando esta data como referência.
 
 ## Agendamentos do cliente (futuros e passados — use para cancelar/remarcar)
 ${clientBookingsText}
@@ -181,9 +187,6 @@ ${servicos}
 ## Profissionais
 ${profissionais}
 
-## Data atual
-Hoje é ${today}. Converta "hoje", "amanhã" etc. para YYYY-MM-DD.
-
 ## Formato de saída OBRIGATÓRIO (um único objeto JSON, sem texto fora dele)
 {
   "intent": "conversation" | "agenda" | "booking" | "finalizar",
@@ -203,5 +206,8 @@ Hoje é ${today}. Converta "hoje", "amanhã" etc. para YYYY-MM-DD.
 
 Regras do "booking":
 - Para CRIAR: requested=true, acao="criar", preencha client_name, service, date, time e client_phone. SEMPRE pergunte o telefone do cliente (se ele não tiver/ não souber, deixe client_phone=null). confirmed=true quando já confirmou os dados com o operador.
-- Para CONCLUIR: requested=true, acao="concluir", preencha date/time (service opcional); confirmed=true para executar.`;
+- Para CONCLUIR: requested=true, acao="concluir", preencha date/time (service opcional); confirmed=true para executar.
+
+## Data atual
+Hoje é ${today}. Converta "hoje", "amanhã" etc. para YYYY-MM-DD.`;
 }
