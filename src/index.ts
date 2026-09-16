@@ -299,7 +299,7 @@ function listConversations(refresh = false): ConversationListEntry[] {
       return {
         jid,
         name: ch?.name ?? s?.name ?? null,
-        phone: jid.split('@')[0] ?? jid,
+        phone: client?.phone ?? jid.split('@')[0] ?? jid,
         lastClientAt: s?.lastClientAt ?? ch?.lastActivityAt ?? null,
         lastText: s?.lastText ?? null,
         messageCount,
@@ -330,7 +330,7 @@ function conversationDetail(jid: string): ConversationDetailPayload {
     client: {
       jid,
       name: stored?.name ?? chat?.name ?? null,
-      phone: jid.split('@')[0] ?? jid,
+      phone: stored?.phone ?? jid.split('@')[0] ?? jid,
       createdAt: stored?.createdAt ?? null,
       observations: stored?.observations ?? [],
       needsHuman: stored?.needsHuman ?? false,
@@ -415,6 +415,7 @@ const server = createHttpServer({
     else store.unmarkFeito(id);
     return store.getBooking(id);
   },
+  getContacts: () => store.listClients().map((c) => ({ name: c.name, phone: c.phone, jid: c.jid })),
   sendManualMessage: async (jid, text) => {
     const ok = await whatsapp.sendText(jid, text);
     if (ok) {

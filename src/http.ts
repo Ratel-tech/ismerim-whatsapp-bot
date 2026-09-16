@@ -31,6 +31,13 @@ export function bucketFor(lastClientAt: number | null, now: number): BroadcastBu
   return 'old';
 }
 
+/** Gera CSV (Nome,Telefone,JID) para importar os contatos na agenda do celular. */
+export function buildContactsCsv(rows: { name: string | null; phone: string; jid: string }[]): string {
+  const cell = (value: string): string => (/[",\n;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+  const lines = rows.map((r) => [cell(r.name ?? ''), cell(r.phone), cell(r.jid)].join(','));
+  return ['Nome,Telefone,JID', ...lines].join('\n');
+}
+
 export interface ConversationListEntry extends ConversationSummary {
   needsHuman: boolean;
   agendou: boolean;
@@ -153,6 +160,8 @@ export interface HttpDeps {
   setPapel(jid: string, input: PapelInput): CustomerDetail;
   /** Marca/desmarca um agendamento como feito. Retorna null se não existir. */
   setBookingFeito(id: number, feito: boolean): Booking | null;
+  /** Contatos salvos (para exportação CSV). */
+  getContacts(): { name: string | null; phone: string; jid: string }[];
   sendManualMessage(jid: string, text: string): Promise<boolean>;
   getBroadcast(): BroadcastPayload;
   startBroadcast(input: StartBroadcastInput): BroadcastStatus;
@@ -206,7 +215,7 @@ const PAGE = `<!DOCTYPE html>
   .field input, .field textarea, .row input, .conv-search, .chat-input input { background:#fff; border:1px solid var(--line); border-radius:8px; color:var(--txt); padding:9px 11px; font-size:14px; font-family:inherit; }
   .field textarea { min-height:80px; resize:vertical; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
-  .row .nome { width:180px; } .row .preco { width:90px; } .row .desc { flex:1; min-width:140px; }
+  .row .nome { width:180px; } .row .preco { width:90px; } .row .dur { width:80px; } .row .desc { flex:1; min-width:140px; }
   .row .hora { width:90px; }
   .sec-title { font-size:14px; font-weight:600; margin:16px 0 10px; color:var(--muted); }
   .code { font-size:24px; font-weight:800; letter-spacing:5px; color:var(--green2); margin:10px 0; }
@@ -410,6 +419,7 @@ const PAGE = `<!DOCTYPE html>
           <div class="tabs" id="conv-filters" style="margin-top:10px;margin-bottom:2px"></div>
           <div class="tabs" id="conv-classes" style="margin-top:6px"></div>
           <button class="btn" id="conv-refresh" style="margin-top:2px">🔄 Atualizar (recarregar chat)</button>
+          <button class="btn" id="conv-export" style="margin-top:2px">⬇️ Exportar contatos (CSV)</button>
         </div>
         <div id="conv-list" class="scroll"></div>
       </div>
@@ -448,7 +458,7 @@ const PAGE = `<!DOCTYPE html>
       <div class="sec-title">🕒 Horário de funcionamento (por dia)</div>
       <div id="hours-area"></div>
 
-      <div class="sec-title">✂️ Serviços (nome, preço, descrição)</div>
+      <div class="sec-title">✂️ Serviços (nome, preço, duração em min, descrição)</div>
       <div id="servicos-area"></div>
       <button class="btn" id="btn-add-servico">＋ Adicionar serviço</button>
 
@@ -649,6 +659,7 @@ function servicoRow(s, idx) {
   return '<div class="row" data-idx="' + idx + '">' +
     '<input class="nome" data-k="nome" value="' + esc(s.nome) + '" placeholder="Nome" />' +
     '<input class="preco" data-k="preco" type="number" step="0.01" value="' + esc(s.preco) + '" placeholder="R$" />' +
+    '<input class="dur" data-k="duracao" type="number" min="0" step="5" value="' + esc(s.duracao ?? '') + '" placeholder="min" title="Duração em minutos" />' +
     '<input class="desc" data-k="descricao" value="' + esc(s.descricao || '') + '" placeholder="Descrição (opcional)" />' +
     '<button class="btn red" data-rm="servicos">✕</button></div>';
 }
@@ -690,6 +701,7 @@ $('btn-save-catalog').addEventListener('click', async () => {
     rowEl.querySelectorAll('[data-k]').forEach(inp => { if (inp.dataset.k !== 'rm') item[inp.dataset.k] = inp.value.trim(); });
     item.preco = item.preco === '' ? null : Number(item.preco);
     item.de = item.de === '' ? undefined : Number(item.de);
+    item.duracao = item.duracao === '' || item.duracao === undefined ? undefined : Number(item.duracao);
     return item;
   }).filter(x => x.nome);
   catalog.servicos = readRows('servicos-area');
@@ -839,6 +851,21 @@ $('conv-classes').addEventListener('click', (e) => {
 });
 $('conv-search').addEventListener('input', (e) => { convSearch = e.target.value.toLowerCase(); renderConvList(); });
 $('conv-refresh').addEventListener('click', () => loadConversations(true));
+$('conv-export').addEventListener('click', async () => {
+  try {
+    const r = await authedFetch('/api/contacts.csv');
+    if (!r.ok) throw new Error('falha ao gerar o CSV');
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'contatos.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert('Erro: ' + e.message); }
+});
 async function loadConversations(force) {
   try {
     const r = await authedFetch('/api/conversations?bucket=' + encodeURIComponent(convFilter) + (force ? '&refresh=1' : ''));
@@ -1225,6 +1252,15 @@ export function createHttpServer(deps: HttpDeps): http.Server {
     }
     if (req.method === 'GET' && url.pathname === '/api/status') {
       json(200, deps.getStatus());
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/api/contacts.csv') {
+      const csv = buildContactsCsv(deps.getContacts());
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="contatos.csv"',
+      });
+      res.end(`\uFEFF${csv}`);
       return;
     }
     if (req.method === 'GET' && url.pathname === '/api/profissionais') {

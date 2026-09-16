@@ -67,6 +67,17 @@ describe('H3 — prompt do operador', () => {
     expect(p).toContain('agenda');
     expect(p).not.toMatch(/\d{10,}/);
   });
+
+  it('deixa claro que o agendamento do barbeiro é SEMPRE para ele (sem perguntar) e pode ser vários', () => {
+    const p = buildOperatorPrompt(catalog, DEFAULT_AGENT_CONFIG, {
+      papel: 'profissional',
+      profissionalNome: 'JUAN',
+      profissionais: [{ id: 1, nome: 'JUAN', horarioInicio: '10:00', horarioFim: '20:00', ativo: true, hasTelefone: true }],
+    });
+    expect(p).toMatch(/você mesmo/i);
+    expect(p).toMatch(/não pergunte/i);
+    expect(p).toMatch(/vários agendamentos/i);
+  });
 });
 
 describe('H3 — roteamento do agente por papel', () => {

@@ -6,3 +6,7 @@ data/
 
 # Arquivo local com chave/credenciais (não versionar)
 chave API.txt
+
+# Backups do .env (contêm segredos)
+.env.bak
+.env.*.bak

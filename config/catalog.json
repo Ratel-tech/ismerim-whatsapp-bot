@@ -41,18 +41,21 @@
     {
       "nome": "Corte",
       "preco": 70,
+      "duracao": 25,
       "descricao": "Corte de cabelo com tesoura e máquina, finalização com produtos",
       "de": null
     },
     {
       "nome": "Barba",
       "preco": 80,
+      "duracao": 25,
       "descricao": "Barba modelada com toalha quente e navalha",
       "de": null
     },
     {
       "nome": "Corte + Barba",
       "preco": 140,
+      "duracao": 45,
       "descricao": "Combo completo de corte e barba",
       "de": null
     },

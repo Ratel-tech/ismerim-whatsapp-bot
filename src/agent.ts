@@ -147,7 +147,7 @@ export class Agent {
 
   async handleInboundMessage(input: { jid: string; text: string; name: string | null; phone?: string | null }): Promise<void> {
     const { jid, text } = input;
-    const client = this.opts.store.upsertClient(jid, input.name);
+    const client = this.opts.store.upsertClient(jid, input.name, input.phone ?? null);
 
     // Atendimento humano ativo: registra a mensagem, mas o bot não responde —
     // a menos que o tempo de pausa já tenha passado (aí o agente retoma).

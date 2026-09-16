@@ -56,6 +56,7 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
     setHuman: () => customer,
     setPapel: () => customer,
     setBookingFeito: () => null,
+    getContacts: () => [],
     sendManualMessage: async () => true,
     listConversations: () => [],
     getBroadcast: () => ({ settings: { ...DEFAULT_BROADCAST_SETTINGS }, status: { running: false, startedAt: null, finishedAt: null, error: null, total: 0, sent: 0, failed: 0, sentToday: 0 } }),
@@ -242,6 +243,33 @@ describe('http api', () => {
         body: JSON.stringify({ feito: true }),
       });
       expect(r.status).toBe(404);
+    });
+  });
+
+  it('GET /api/contacts.csv exporta os contatos (nome + telefone)', async () => {
+    await withServer(
+      makeDeps({
+        getContacts: () => [
+          { name: 'João', phone: '5521988887777', jid: '123@lid' },
+          { name: null, phone: '5521911112222', jid: '456@lid' },
+        ],
+      }),
+      async (base) => {
+        const r = await fetch(`${base}/api/contacts.csv`);
+        expect(r.status).toBe(200);
+        expect(r.headers.get('content-type')).toContain('text/csv');
+        const body = await r.text();
+        expect(body).toContain('Nome,Telefone,JID');
+        expect(body).toContain('João,5521988887777,123@lid');
+        expect(body).toContain(',5521911112222,456@lid');
+      },
+    );
+  });
+
+  it('GET /api/contacts.csv exige token quando configurado (401)', async () => {
+    await withServer(makeDeps({ panelToken: 'segredo123' }), async (base) => {
+      const r = await fetch(`${base}/api/contacts.csv`);
+      expect(r.status).toBe(401);
     });
   });
 
@@ -522,6 +550,13 @@ describe('http api — profissionais', () => {
       const r = await fetch(`${base}/`);
       expect(r.status).toBe(200);
       expect(await r.text()).toContain('data-tab="prof"');
+    });
+  });
+
+  it('catálogo no painel permite configurar a duração do serviço (min)', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const html = await (await fetch(`${base}/`)).text();
+      expect(html).toContain('data-k="duracao"');
     });
   });
 });

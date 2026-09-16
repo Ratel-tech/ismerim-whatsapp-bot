@@ -167,22 +167,40 @@ export class Store {
   }
 
   // ---------- clientes ----------
-  upsertClient(jid: string, name: string | null): StoredClient {
-    const phone = jid.split('@')[0] ?? jid;
+  /**
+   * Cria/atualiza o contato do cliente. `phone` é o número REAL quando o
+   * WhatsApp entrega (senão cai para o JID). Nunca apaga um número já salvo.
+   */
+  upsertClient(jid: string, name: string | null, phone?: string | null): StoredClient {
+    const jidPhone = jid.split('@')[0] ?? jid;
+    const realPhone = (phone ?? '').trim();
     let client = this.db.clients.find((c) => c.jid === jid);
     if (!client) {
-      client = { jid, name, phone, createdAt: new Date().toISOString() };
+      client = { jid, name, phone: realPhone || jidPhone, createdAt: new Date().toISOString() };
       this.db.clients.push(client);
       this.write();
-    } else if (name && !client.name) {
-      client.name = name;
-      this.write();
+    } else {
+      let changed = false;
+      if (name && !client.name) {
+        client.name = name;
+        changed = true;
+      }
+      if (realPhone && client.phone !== realPhone) {
+        client.phone = realPhone;
+        changed = true;
+      }
+      if (changed) this.write();
     }
     return client;
   }
 
   getClient(jid: string): StoredClient | null {
     return this.db.clients.find((c) => c.jid === jid) ?? null;
+  }
+
+  /** Todos os contatos salvos (para lista/exportação). */
+  listClients(): StoredClient[] {
+    return [...this.db.clients];
   }
 
   /** Observações registradas do cliente (vazio se nenhuma). */

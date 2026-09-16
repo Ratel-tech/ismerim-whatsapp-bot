@@ -22,7 +22,7 @@ export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts:
   const today = now.toLocaleDateString('pt-BR');
 
   const servicos = catalog.servicos.length
-    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}${s.descricao ? ` (${shortDesc(s.descricao)})` : ''}`).join('\n')
+    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}${s.duracao ? ` (${s.duracao} min)` : ''}${s.descricao ? ` (${shortDesc(s.descricao)})` : ''}`).join('\n')
     : '- (nenhum serviço cadastrado)';
 
   const promocoes = catalog.promocoes.length
@@ -163,7 +163,7 @@ export function buildOperatorPrompt(catalog: Catalog, agentCfg: AgentConfig, opt
     ? ativos.map((p) => `- ${p.nome}${p.horarioInicio && p.horarioFim ? ` (${p.horarioInicio} às ${p.horarioFim})` : ''}`).join('\n')
     : '- (nenhum profissional cadastrado)';
   const servicos = catalog.servicos.length
-    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}`).join('\n')
+    ? catalog.servicos.map((s) => `- ${s.nome} — ${formatPreco(s.preco)}${s.duracao ? ` (${s.duracao} min)` : ''}`).join('\n')
     : '- (nenhum serviço cadastrado)';
   const quem = opts.papel === 'admin' ? 'o ADMINISTRADOR' : `o PROFISSIONAL ${opts.profissionalNome ?? ''}`.trim();
 
@@ -171,7 +171,7 @@ export function buildOperatorPrompt(catalog: Catalog, agentCfg: AgentConfig, opt
 
 ## Suas funções (operador)
 1. VER AGENDAMENTOS — quando pedirem para ver a agenda/agendamentos, responda com intent "agenda" (o sistema devolve a lista real).
-2. CRIAR AGENDAMENTO de um cliente — colete nome do cliente, telefone do cliente (SEMPRE pergunte), serviço, data e horário. O profissional padrão é o próprio operador (quando for profissional); o admin pode indicar outro profissional da lista. Use acao="criar".
+2. CRIAR AGENDAMENTO de um cliente — colete nome do cliente, telefone do cliente (SEMPRE pergunte), serviço, data e horário. Para o BARBEIRO, o profissional é SEMPRE você mesmo (deixe professional=null) — NÃO pergunte com quem é; só use outro profissional se ele informar. O ADMIN pode indicar o profissional. Você pode criar vários agendamentos seguidos (um por cliente). Use acao="criar".
 3. MARCAR COMO FEITO — para agendamentos que já aconteceram, use acao="concluir" com a data e o horário.
 
 ## Regras
@@ -205,7 +205,7 @@ ${profissionais}
 }
 
 Regras do "booking":
-- Para CRIAR: requested=true, acao="criar", preencha client_name, service, date, time e client_phone. SEMPRE pergunte o telefone do cliente (se ele não tiver/ não souber, deixe client_phone=null). confirmed=true quando já confirmou os dados com o operador.
+- Para CRIAR: requested=true, acao="criar", preencha client_name, service, date, time e client_phone. SEMPRE pergunte o telefone do cliente (se ele não tiver/ não souber, deixe client_phone=null). Para o BARBEIRO, deixe professional=null (o agendamento é para ele mesmo) — só preencha professional se o operador informar outro profissional. confirmed=true quando já confirmou os dados com o operador.
 - Para CONCLUIR: requested=true, acao="concluir", preencha date/time (service opcional); confirmed=true para executar.
 
 ## Data atual

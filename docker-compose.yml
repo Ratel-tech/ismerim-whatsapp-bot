@@ -8,6 +8,8 @@ services:
     environment:
       # Escuta em todas as interfaces para o port mapping funcionar.
       HOST: 0.0.0.0
+      # Fuso do estabelecimento (evita o agente "viajar" na data em container UTC).
+      TZ: America/Sao_Paulo
     ports:
       - "3081:3081"
     volumes:

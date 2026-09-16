@@ -9,6 +9,10 @@ const envFile = path.join(ROOT, '.env');
 
 dotenv.config({ path: envFile });
 
+// Fuso do estabelecimento: garante que "hoje", datas e lembretes usem o horário
+// de Brasília mesmo em servidor/container em UTC. Pode ser sobrescrito pelo .env (TZ).
+if (!process.env.TZ) process.env.TZ = 'America/Sao_Paulo';
+
 /** Pasta de dados (banco db.json, sessão do WhatsApp, logs). Pode ficar fora do projeto via DATA_DIR. */
 const dataDir = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
 

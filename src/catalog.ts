@@ -5,6 +5,8 @@ import { config } from './config.js';
 export interface Service {
   nome: string;
   preco: number;
+  /** Duração do serviço em minutos (para o agente ter noção do tempo). */
+  duracao?: number;
   descricao?: string;
 }
 
