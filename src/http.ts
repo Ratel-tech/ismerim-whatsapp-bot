@@ -528,17 +528,22 @@ async function authedFetch(path, opts) {
   return r;
 }
 
-document.querySelectorAll('.rail-btn').forEach((t) =>
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.rail-btn').forEach((x) => x.classList.toggle('on', x === t));
-    document.querySelectorAll('[id^="tab-"]').forEach((x) => x.classList.add('hidden'));
-    $('tab-' + t.dataset.tab).classList.remove('hidden');
-    if (t.dataset.tab === 'agente') loadAgentForm();
-    if (t.dataset.tab === 'catalogo') loadCatalogForm();
-    if (t.dataset.tab === 'config') loadConfigForm();
-    if (t.dataset.tab === 'conv') loadConversations();
-    if (t.dataset.tab === 'prof') loadProfissionaisForm();
-  }));
+// Ativa uma aba e (re)carrega os dados dela. Salva a aba ativa para o reload.
+function activateTab(tab) {
+  const btn = document.querySelector('.rail-btn[data-tab="' + tab + '"]');
+  if (!btn) return;
+  document.querySelectorAll('.rail-btn').forEach((x) => x.classList.toggle('on', x === btn));
+  document.querySelectorAll('[id^="tab-"]').forEach((x) => x.classList.add('hidden'));
+  const el = $('tab-' + tab);
+  if (el) el.classList.remove('hidden');
+  try { localStorage.setItem('activeTab', tab); } catch (e) { /* sem storage */ }
+  if (tab === 'agente') loadAgentForm();
+  if (tab === 'catalogo') loadCatalogForm();
+  if (tab === 'config') loadConfigForm();
+  if (tab === 'conv') loadConversations();
+  if (tab === 'prof') loadProfissionaisForm();
+}
+document.querySelectorAll('.rail-btn').forEach((t) => t.addEventListener('click', () => activateTab(t.dataset.tab)));
 
 // Navegação lateral: expandir/recolher (ícones ⇄ ícones + nomes)
 $('rail-toggle').addEventListener('click', () => {
@@ -1219,6 +1224,11 @@ document.addEventListener('click', (e) => {
 
 refreshWa();
 setInterval(refreshWa, 3000);
+
+// Restaura a mesma aba ao recarregar a página (executado no fim, com tudo já definido).
+let savedTab = 'wa';
+try { savedTab = localStorage.getItem('activeTab') || 'wa'; } catch (e) { /* sem storage */ }
+activateTab(savedTab);
 </script>
 </body>
 </html>`;

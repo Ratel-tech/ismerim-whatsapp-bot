@@ -559,4 +559,13 @@ describe('http api — profissionais', () => {
       expect(html).toContain('data-k="duracao"');
     });
   });
+
+  it('painel restaura a aba ativa ao recarregar a página', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const html = await (await fetch(`${base}/`)).text();
+      expect(html).toContain('function activateTab');
+      expect(html).toContain("localStorage.getItem('activeTab')");
+      expect(html).toContain("localStorage.setItem('activeTab'");
+    });
+  });
 });
