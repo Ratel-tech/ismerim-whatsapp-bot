@@ -16,7 +16,7 @@ Historico de mudancas relevantes. Formato baseado em Keep a Changelog.
 - **Rolagem independente no painel de conversas:** a grade `.inbox` nao definia `grid-template-rows`, entao o painel de detalhe crescia alem da altura do container e era cortado por `overflow:hidden`; a pagina rolava apenas alguns pixels e o formulario ficava inalcancavel. Agora `grid-template-rows: minmax(0,1fr)` e `min-height:0` limitam cada coluna, que rola por conta propria.
 
 ### Alterado
-- **Painel de conversas mais compacto:** filtros em linha unica (rolagem horizontal), titulo e botoes na mesma linha, itens com avatar reduzido e badge inline. A lista passou a exibir mais conversas por tela.
+- **Painel de conversas mais compacto:** filtros em **menu expansivel** (recolhido por padrao, com o filtro ativo indicado no botao), titulo e botoes na mesma linha, itens com avatar reduzido e badge inline. A lista passou a exibir mais conversas por tela.
 
 ## Versoes anteriores
 

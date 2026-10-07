@@ -243,9 +243,12 @@ const PAGE = `<!DOCTYPE html>
   .panel-list .panel-head { padding:10px 12px 8px; }
   .panel-list .panel-head b { font-size:14px; }
   .panel-list .conv-search { padding:7px 10px; margin-top:8px; font-size:13px; }
-  .panel-list .tabs { gap:4px; margin:5px 0 0; flex-wrap:nowrap; overflow-x:auto; }
-  .panel-list .tabs::-webkit-scrollbar { height:0; }
-  .panel-list .tab { padding:2px 8px; font-size:11px; border-radius:14px; flex:none; white-space:nowrap; }
+  .panel-list .tabs { gap:4px; margin:4px 0 0; flex-wrap:wrap; }
+  .panel-list .tab { padding:2px 8px; font-size:11px; border-radius:14px; }
+  .panel-list .filters-toggle { width:100%; text-align:left; font-size:12px; padding:5px 10px; margin:6px 0 0; }
+  .panel-list .filters-toggle .flt-active { color:var(--green); font-weight:600; }
+  .panel-list #conv-filters-box { margin-top:2px; }
+  .panel-list .filters-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:6px 0 2px; }
   .panel-list .conv-item { gap:9px; padding:6px 10px; align-items:center; }
   .panel-list .avatar { width:36px; height:36px; font-size:12px; }
   .panel-list .conv-item .nm { font-size:14px; }
@@ -446,8 +449,13 @@ const PAGE = `<!DOCTYPE html>
             </div>
           </div>
           <input id="conv-search" class="conv-search" placeholder="Buscar nome ou telefone" />
-          <div class="tabs" id="conv-filters"></div>
-          <div class="tabs" id="conv-classes"></div>
+          <button class="btn filters-toggle" id="conv-filters-toggle" type="button" aria-expanded="false">Filtros ▾</button>
+          <div id="conv-filters-box" class="hidden">
+            <div class="filters-label">Período</div>
+            <div class="tabs" id="conv-filters"></div>
+            <div class="filters-label">Etapa / status</div>
+            <div class="tabs" id="conv-classes"></div>
+          </div>
         </div>
         <div id="conv-list" class="scroll"></div>
       </div>
@@ -872,10 +880,27 @@ function fmtDateTime(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
+function convFilterSummary() {
+  const parts = [];
+  if (convFilter !== 'all') parts.push((BC_FILTERS.find((f) => f.id === convFilter) || {}).label || convFilter);
+  if (convClass !== 'all') parts.push((CLASS_FILTERS.find((f) => f.id === convClass) || {}).label || convClass);
+  return parts.join(' · ');
+}
+function updateFiltersToggle() {
+  const open = !$('conv-filters-box').classList.contains('hidden');
+  const sum = convFilterSummary();
+  $('conv-filters-toggle').innerHTML = 'Filtros' + (sum ? ' <span class="flt-active">' + esc(sum) + '</span>' : '') + ' ' + (open ? '▴' : '▾');
+  $('conv-filters-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 function renderConvFilters() {
   $('conv-filters').innerHTML = BC_FILTERS.map((f) => '<div class="tab' + (f.id === convFilter ? ' on' : '') + '" data-cf="' + f.id + '">' + f.label + '</div>').join('');
   $('conv-classes').innerHTML = CLASS_FILTERS.map((f) => '<div class="tab' + (f.id === convClass ? ' on' : '') + '" data-ccl="' + f.id + '">' + f.label + '</div>').join('');
+  updateFiltersToggle();
 }
+$('conv-filters-toggle').addEventListener('click', () => {
+  $('conv-filters-box').classList.toggle('hidden');
+  updateFiltersToggle();
+});
 $('conv-filters').addEventListener('click', (e) => {
   const t = e.target.closest('[data-cf]');
   if (!t) return;

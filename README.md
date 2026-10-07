@@ -132,7 +132,7 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 Abas: **WhatsApp** (QR/status) · **Agendamentos** (status + marcar feito) · **Profissionais** (cadastro + telefone privado) · **Conversas** (inbox estilo WhatsApp, envio em massa, exportar contatos) · **Agente** · **Catálogo** · **Config**.
 
 - O painel **lembra a aba ativa** ao recarregar.
-- Na aba **Conversas**, cada coluna (lista, chat, ficha) tem **rolagem independente** e a página fica fixa; a lista é **compacta** (filtros em linha, itens com badge inline) para caber mais conversas.
+- Na aba **Conversas**, cada coluna (lista, chat, ficha) tem **rolagem independente** e a página fica fixa; a lista é **compacta** (filtros em menu expansível, itens com badge inline) para caber mais conversas.
 - O telefone do profissional é **privado**: nunca aparece no agente/cliente/CSV.
 
 ---

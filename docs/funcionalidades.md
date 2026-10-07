@@ -37,7 +37,7 @@
 Abas: **WhatsApp** (QR/status) - **Agendamentos** (status + marcar feito) - **Profissionais** (cadastro + telefone privado) - **Conversas** (inbox estilo WhatsApp, envio em massa, exportar contatos) - **Agente** - **Catalogo** - **Config**.
 
 - O painel **lembra a aba ativa** ao recarregar.
-- A lista de conversas e **compacta** (filtros em linha, itens com avatar reduzido e badge inline).
+- A lista de conversas e **compacta**: filtros em **menu expansivel** (recolhido por padrao; o botao mostra o filtro ativo), itens com avatar reduzido e badge inline.
 - Na aba Conversas, cada coluna (lista, chat, ficha) tem **rolagem independente** e a pagina fica fixa.
 - O telefone do profissional e **privado**: nunca aparece no agente/cliente/CSV.
 - Pode ser protegido com `PANEL_TOKEN`.
