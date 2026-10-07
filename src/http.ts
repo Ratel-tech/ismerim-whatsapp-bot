@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import type { AgentConfig } from './agent-config.js';
+import type { AtendimentoOutcome, NovoAgendamentoInput, RemarcarAgendamentoInput } from './atendimento.js';
 import type { Catalog } from './catalog.js';
 import type { ProfissionalPublic } from './profissionais.js';
 import type { Booking } from './store.js';
@@ -160,6 +161,10 @@ export interface HttpDeps {
   setPapel(jid: string, input: PapelInput): CustomerDetail;
   /** Marca/desmarca um agendamento como feito. Retorna null se não existir. */
   setBookingFeito(id: number, feito: boolean): Booking | null;
+  /** Cria um agendamento para a conversa pelo painel (atendimento humano). */
+  createBookingForClient(jid: string, input: Omit<NovoAgendamentoInput, 'jid' | 'clientName'>): Promise<AtendimentoOutcome>;
+  /** Remarca um agendamento existente pelo painel. */
+  rescheduleBooking(id: number, input: Omit<RemarcarAgendamentoInput, 'id'>): Promise<AtendimentoOutcome>;
   /** Contatos salvos (para exportação CSV). */
   getContacts(): { name: string | null; phone: string; jid: string }[];
   sendManualMessage(jid: string, text: string): Promise<boolean>;
@@ -225,12 +230,31 @@ const PAGE = `<!DOCTYPE html>
   .hint { color:var(--muted); font-size:12px; margin-top:6px; }
   .ok-msg { color:#1b9a5b; font-size:13px; margin-top:8px; }
   .err-msg { color:#e05252; font-size:13px; margin-top:8px; }
-  .inbox { display:grid; grid-template-columns:360px minmax(0,1fr) 360px; height:calc(100vh - 150px); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 2px 14px rgba(0,0,0,.06); }
-  .panel { background:#fff; display:flex; flex-direction:column; min-width:0; }
+  .inbox { display:grid; grid-template-columns:360px minmax(0,1fr) 360px; grid-template-rows:minmax(0,1fr); height:calc(100vh - 150px); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:0 2px 14px rgba(0,0,0,.06); }
+  .panel { background:#fff; display:flex; flex-direction:column; min-width:0; min-height:0; }
   .panel-list { border-right:1px solid var(--line); background:var(--panel2); }
-  .panel-detail { border-left:1px solid var(--line); background:#fff; overflow-y:auto; }
+  .panel-detail { border-left:1px solid var(--line); background:#fff; overflow-y:auto; min-height:0; }
   .chat-area { background:#efeae2; }
+  body.tab-conv { overflow:hidden; }
+  body.tab-conv .wrap { display:flex; flex-direction:column; height:100vh; }
+  body.tab-conv #tab-conv { display:flex; flex-direction:column; flex:1; min-height:0; }
+  body.tab-conv .inbox { flex:1; min-height:0; height:auto; }
   .panel-head { padding:14px 16px; border-bottom:1px solid var(--line); background:#fff; }
+  .panel-list .panel-head { padding:10px 12px 8px; }
+  .panel-list .panel-head b { font-size:14px; }
+  .panel-list .conv-search { padding:7px 10px; margin-top:8px; font-size:13px; }
+  .panel-list .tabs { gap:4px; margin:5px 0 0; flex-wrap:nowrap; overflow-x:auto; }
+  .panel-list .tabs::-webkit-scrollbar { height:0; }
+  .panel-list .tab { padding:2px 8px; font-size:11px; border-radius:14px; flex:none; white-space:nowrap; }
+  .panel-list .conv-item { gap:9px; padding:6px 10px; align-items:center; }
+  .panel-list .avatar { width:36px; height:36px; font-size:12px; }
+  .panel-list .conv-item .nm { font-size:14px; }
+  .panel-list .prev-row { display:flex; align-items:center; gap:6px; margin-top:1px; }
+  .panel-list .prev-row .prev { flex:1; min-width:0; margin-top:0; }
+  .panel-list .prev-row .badge { flex:none; }
+  .panel-list .list-top { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .panel-list .list-actions { display:flex; gap:6px; }
+  .panel-list .list-actions .btn { font-size:11px; padding:4px 8px; margin:0; }
   .panel-head b { font-size:16px; }
   .conv-search { width:100%; background:#f0f2f5; border:none; border-radius:8px; color:var(--txt); padding:9px 12px; margin-top:10px; }
   .scroll { overflow-y:auto; flex:1; }
@@ -414,12 +438,16 @@ const PAGE = `<!DOCTYPE html>
     <div class="inbox">
       <div class="panel panel-list">
         <div class="panel-head">
-          <b id="conv-count">Conversas</b>
+          <div class="list-top">
+            <b id="conv-count">Conversas</b>
+            <div class="list-actions">
+              <button class="btn" id="conv-refresh" title="Atualizar">🔄</button>
+              <button class="btn" id="conv-export" title="Exportar contatos (CSV)">⬇️ CSV</button>
+            </div>
+          </div>
           <input id="conv-search" class="conv-search" placeholder="Buscar nome ou telefone" />
-          <div class="tabs" id="conv-filters" style="margin-top:10px;margin-bottom:2px"></div>
-          <div class="tabs" id="conv-classes" style="margin-top:6px"></div>
-          <button class="btn" id="conv-refresh" style="margin-top:2px">🔄 Atualizar (recarregar chat)</button>
-          <button class="btn" id="conv-export" style="margin-top:2px">⬇️ Exportar contatos (CSV)</button>
+          <div class="tabs" id="conv-filters"></div>
+          <div class="tabs" id="conv-classes"></div>
         </div>
         <div id="conv-list" class="scroll"></div>
       </div>
@@ -536,6 +564,7 @@ function activateTab(tab) {
   document.querySelectorAll('[id^="tab-"]').forEach((x) => x.classList.add('hidden'));
   const el = $('tab-' + tab);
   if (el) el.classList.remove('hidden');
+  document.body.classList.toggle('tab-conv', tab === 'conv');
   try { localStorage.setItem('activeTab', tab); } catch (e) { /* sem storage */ }
   if (tab === 'agente') loadAgentForm();
   if (tab === 'catalogo') loadCatalogForm();
@@ -817,6 +846,13 @@ const convsAll = [];
 let selectedJid = null;
 let convSearch = '';
 let bcBusy = false;
+let catalogo = null;
+let agendaModo = 'novo';
+let agendaEditId = null;
+let agendaData = '';
+let agendaHora = '';
+let agendaServico = '';
+let agendaProf = '';
 const AV_COLORS = ['#25d366', '#1db4b4', '#b46a1d', '#9b25d3', '#d3256a'];
 function escName(s) { return String(s == null ? '' : s); }
 function initials(name, phone) {
@@ -895,8 +931,7 @@ function renderConvList() {
     return '<div class="conv-item' + (c.jid === selectedJid ? ' on' : '') + '" data-jid="' + esc(c.jid) + '">' +
       '<div class="avatar" style="background:' + color + '">' + esc(initials(c.name, c.phone)) + '</div>' +
       '<div class="txt"><div class="n"><span class="nm">' + esc(c.name || c.phone) + '</span><span class="tm">' + fmtTime(now, c.lastClientAt) + '</span></div>' +
-      '<div class="prev">' + esc(c.lastText || '') + '</div>' +
-      (badge ? '<div class="dots">' + badge + '</div>' : '') + '</div></div>';
+      '<div class="prev-row"><span class="prev">' + esc(c.lastText || '') + '</span>' + (badge || '') + '</div></div></div>';
   }).join('');
 }
 $('conv-list').addEventListener('click', (e) => {
@@ -912,6 +947,9 @@ async function selectConversation(jid) {
     if (!r.ok) throw new Error(d.error || 'Erro');
     if (!profs.length) {
       try { profs = await (await authedFetch('/api/profissionais')).json(); } catch { /* sem profissionais */ }
+    }
+    if (!catalogo) {
+      try { catalogo = await (await authedFetch('/api/catalog')).json(); } catch { /* sem catálogo */ }
     }
     renderChat(d);
     renderDetail(d);
@@ -963,7 +1001,17 @@ function renderDetail(d) {
     '<div class="field" style="margin-top:10px"><textarea id="obs-note" placeholder="Nova observação (ficará marcada como Humano)"></textarea></div>' +
     '<button class="btn green" id="btn-add-obs" data-obs-add style="width:100%;margin:0">➕ Adicionar observação</button>' +
     '<div class="summary-card"><div class="top"><b>Etapa do funil</b><span>' + esc(c.funil.label) + '</span></div><div class="bar"><span style="width:' + pct + '%"></span></div><div class="sub" style="margin:8px 0 0">' + c.funil.stage + ' de ' + c.funil.total + ' etapas</div></div>' +
-    '<div class="sec2">Agendamentos</div>' + (d.bookings.length ? d.bookings.map((b) => '<div class="ficha-row"><span class="k">' + esc(b.service || '') + (b.status === 'cancelado' ? ' (cancelado)' : '') + '</span><b>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</b></div>').join('') : '<div class="sub">Nenhum agendamento.</div>') +
+    '<div class="sec2">Agendamentos</div>' + (d.bookings.length ? d.bookings.map(bookingRowHtml).join('') : '<div class="sub">Nenhum agendamento.</div>') +
+    '<div class="field" style="margin-top:8px"><label>Serviço</label><select id="ag-servico"' + (agendaModo === 'remarcar' ? ' disabled' : '') + '>' +
+      (((catalogo && catalogo.servicos) || []).map((s) => '<option value="' + esc(s.nome) + '"' + (agendaServico && agendaServico === s.nome ? ' selected' : '') + '>' + esc(s.nome) + (s.preco != null ? ' — R$ ' + esc(String(s.preco)) : '') + '</option>').join('') || '<option value="">(sem serviços no catálogo)</option>') +
+    '</select></div>' +
+    '<div class="row"><label style="width:64px">Data</label><input id="ag-data" type="date" value="' + esc(agendaData) + '" style="flex:1" /><label style="width:54px">Hora</label><input id="ag-hora" type="time" class="hora" value="' + esc(agendaHora) + '" /></div>' +
+    '<div class="field"><label>Profissional (opcional)</label><select id="ag-prof"><option value="">Sem preferência</option>' +
+      profs.filter((p) => p.ativo).map((p) => '<option value="' + esc(p.nome) + '"' + (agendaProf === p.nome ? ' selected' : '') + '>' + esc(p.nome) + '</option>').join('') +
+    '</select></div>' +
+    '<div class="row"><button class="btn green" id="btn-agenda-save" style="flex:1">' + (agendaModo === 'remarcar' ? '🔄 Salvar remarcação' : '➕ Agendar') + '</button>' +
+      (agendaModo === 'remarcar' ? '<button class="btn" id="btn-agenda-cancel">Cancelar</button>' : '') + '</div>' +
+    '<div id="agenda-msg"></div>' +
     '<div style="height:20px"></div>';
   $('btn-wa').addEventListener('click', () => window.open('https://wa.me/' + (c.phone || ''), '_blank'));
   $('btn-copy').addEventListener('click', () => { navigator.clipboard.writeText(c.phone || ''); alert('Copiado'); });
@@ -993,6 +1041,68 @@ function renderDetail(d) {
       renderDetail(d);
       renderConvList();
     } catch (e) { alert('Erro: ' + e.message); }
+  });
+  wireAgenda(d);
+}
+function bookingRowHtml(b) {
+  const cancelado = b.status === 'cancelado';
+  const feito = b.status === 'feito';
+  const sufixo = cancelado ? ' (cancelado)' : feito ? ' (feito)' : '';
+  const podeRemarcar = !cancelado && !feito;
+  return '<div class="ficha-row"><span class="k">' + esc(b.service || '') + sufixo + '</span><span><b>' + b.date.split('-').reverse().join('/') + ' ' + esc(b.time) + '</b>' +
+    (podeRemarcar ? ' <button class="btn-mini" data-agenda-remarcar="' + b.id + '" data-bdate="' + esc(b.date) + '" data-btime="' + esc(b.time) + '" data-bservice="' + esc(b.service || '') + '">🔄 Remarcar</button>' : '') +
+    '</span></div>';
+}
+function agendaReset() {
+  agendaModo = 'novo';
+  agendaEditId = null;
+  agendaData = '';
+  agendaHora = '';
+  agendaServico = '';
+  agendaProf = '';
+}
+async function saveAgenda() {
+  const msg = $('agenda-msg');
+  if (msg) msg.innerHTML = '';
+  const date = $('ag-data').value;
+  const time = $('ag-hora').value;
+  const professional = $('ag-prof').value || null;
+  if (!date || !time) { if (msg) msg.innerHTML = '<div class="err-msg">Informe a data e o horário.</div>'; return; }
+  try {
+    let r;
+    if (agendaModo === 'remarcar' && agendaEditId) {
+      r = await authedFetch('/api/bookings/' + agendaEditId + '/reschedule', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, time, professional }) });
+    } else {
+      const service = $('ag-servico').value;
+      if (!service) { if (msg) msg.innerHTML = '<div class="err-msg">Escolha o serviço.</div>'; return; }
+      r = await authedFetch('/api/conversations/' + encodeURIComponent(selectedJid) + '/bookings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ service, date, time, professional }) });
+    }
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    agendaReset();
+    const dd = await (await authedFetch('/api/conversations/' + encodeURIComponent(selectedJid))).json();
+    renderDetail(dd);
+    renderConvList();
+  } catch (e) {
+    const m = $('agenda-msg');
+    if (m) m.innerHTML = '<div class="err-msg">' + esc(e.message) + '</div>';
+  }
+}
+function wireAgenda(d) {
+  const saveBtn = $('btn-agenda-save');
+  if (saveBtn) saveBtn.addEventListener('click', saveAgenda);
+  const cancelBtn = $('btn-agenda-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { agendaReset(); renderDetail(d); });
+  document.querySelectorAll('[data-agenda-remarcar]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      agendaModo = 'remarcar';
+      agendaEditId = Number(btn.dataset.agendaRemarcar);
+      agendaData = btn.dataset.bdate || '';
+      agendaHora = btn.dataset.btime || '';
+      agendaServico = btn.dataset.bservice || '';
+      agendaProf = '';
+      renderDetail(d);
+    });
   });
 }
 function obsListHtml(list) {
@@ -1353,6 +1463,47 @@ export function createHttpServer(deps: HttpDeps): http.Server {
         return;
       }
       json(200, booking);
+      return;
+    }
+    const convBookingMatch = url.pathname.match(/^\/api\/conversations\/(.+)\/bookings$/);
+    if (req.method === 'POST' && convBookingMatch) {
+      const jid = decodeURIComponent(convBookingMatch[1] ?? '');
+      const body = (await readBody()) as { service?: string; date?: string; time?: string; professional?: string | null };
+      if (typeof body.service !== 'string' || !body.service.trim() || typeof body.date !== 'string' || !body.date.trim() || typeof body.time !== 'string' || !body.time.trim()) {
+        json(422, { error: 'Informe serviço, data e horário.' });
+        return;
+      }
+      const out = await deps.createBookingForClient(jid, {
+        service: body.service.trim(),
+        date: body.date.trim(),
+        time: body.time.trim(),
+        professional: body.professional ?? null,
+      });
+      if (!out.ok) {
+        json(422, { error: out.error });
+        return;
+      }
+      json(200, out.booking);
+      return;
+    }
+    const rescheduleMatch = url.pathname.match(/^\/api\/bookings\/(\d+)\/reschedule$/);
+    if (req.method === 'PUT' && rescheduleMatch) {
+      const id = Number(rescheduleMatch[1]);
+      const body = (await readBody()) as { date?: string; time?: string; professional?: string | null };
+      if (typeof body.date !== 'string' || !body.date.trim() || typeof body.time !== 'string' || !body.time.trim()) {
+        json(422, { error: 'Informe a nova data e o novo horário.' });
+        return;
+      }
+      const out = await deps.rescheduleBooking(id, {
+        date: body.date.trim(),
+        time: body.time.trim(),
+        professional: body.professional ?? null,
+      });
+      if (!out.ok) {
+        json(out.code === 'not_found' ? 404 : 422, { error: out.error });
+        return;
+      }
+      json(200, out.booking);
       return;
     }
     const obsIndexMatch = url.pathname.match(/^\/api\/conversations\/(.+)\/observations\/(\d+)$/);

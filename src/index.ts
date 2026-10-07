@@ -14,6 +14,7 @@ import { resolverPapel } from './papeis.js';
 import { concluirAgendamento, listarAgenda, professionalNameForCreate } from './operador.js';
 import { cancelBookingCliente, confirmBookingCliente, formatConfirmation, validateAndRescheduleBooking } from './bookings.js';
 import { createBookingFromAgent } from './booking-flow.js';
+import { criarAgendamentoAtendimento, remarcarAgendamentoAtendimento, type AtendimentoDeps } from './atendimento.js';
 import {
   buildCancellationNotification,
   buildClientConfirmationNotification,
@@ -349,6 +350,17 @@ function conversationDetail(jid: string): ConversationDetailPayload {
   };
 }
 
+/** Dependências do atendimento (painel) para criar/remarcar agendamentos. */
+function atendimentoDeps(): AtendimentoDeps {
+  return {
+    store,
+    catalog: loadCatalog(),
+    profissionais: store.listProfissionais(),
+    adminPhone: config.adminPhone,
+    send: (jid, text) => whatsapp.sendText(jid, text),
+  };
+}
+
 const server = createHttpServer({
   getStatus: () => ({
     status: whatsapp.status,
@@ -415,6 +427,15 @@ const server = createHttpServer({
     else store.unmarkFeito(id);
     return store.getBooking(id);
   },
+  createBookingForClient: (jid, input) => {
+    const client = store.getClient(jid);
+    return criarAgendamentoAtendimento(atendimentoDeps(), {
+      jid,
+      clientName: client?.name ?? client?.phone ?? null,
+      ...input,
+    });
+  },
+  rescheduleBooking: (id, input) => remarcarAgendamentoAtendimento(atendimentoDeps(), { id, ...input }),
   getContacts: () => store.listClients().map((c) => ({ name: c.name, phone: c.phone, jid: c.jid })),
   sendManualMessage: async (jid, text) => {
     const ok = await whatsapp.sendText(jid, text);

@@ -56,6 +56,8 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
     setHuman: () => customer,
     setPapel: () => customer,
     setBookingFeito: () => null,
+    createBookingForClient: async () => ({ ok: false, code: 'unconfigured', error: 'não configurado' }),
+    rescheduleBooking: async () => ({ ok: false, code: 'unconfigured', error: 'não configurado' }),
     getContacts: () => [],
     sendManualMessage: async () => true,
     listConversations: () => [],
@@ -243,6 +245,131 @@ describe('http api', () => {
         body: JSON.stringify({ feito: true }),
       });
       expect(r.status).toBe(404);
+    });
+  });
+
+  it('POST /api/conversations/:jid/bookings cria agendamento pela ficha', async () => {
+    const booking = {
+      id: 8,
+      clientJid: '5511999999999@s.whatsapp.net',
+      clientName: 'João',
+      service: 'Corte',
+      price: 70,
+      date: '2026-09-22',
+      time: '15:00',
+      status: 'confirmado' as const,
+      createdAt: '2026-09-01T00:00:00.000Z',
+      notifiedAt: null,
+    };
+    let received: unknown = null;
+    await withServer(
+      makeDeps({
+        createBookingForClient: async (jid, input) => {
+          received = { jid, ...input };
+          return { ok: true, booking };
+        },
+      }),
+      async (base) => {
+        const r = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/bookings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ service: 'Corte', date: '2026-09-22', time: '15:00', professional: 'JUAN' }),
+        });
+        expect(r.status).toBe(200);
+        expect(((await r.json()) as { id: number }).id).toBe(8);
+        expect(received).toEqual({
+          jid: '5511@s.whatsapp.net',
+          service: 'Corte',
+          date: '2026-09-22',
+          time: '15:00',
+          professional: 'JUAN',
+        });
+      },
+    );
+  });
+
+  it('POST /api/conversations/:jid/bookings devolve 422 com a validação', async () => {
+    await withServer(
+      makeDeps({ createBookingForClient: async () => ({ ok: false, code: 'slot_taken', error: 'Esse horário já está ocupado.' }) }),
+      async (base) => {
+        const r = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/bookings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ service: 'Corte', date: '2026-09-22', time: '15:00' }),
+        });
+        expect(r.status).toBe(422);
+        expect(((await r.json()) as { error: string }).error).toContain('ocupado');
+      },
+    );
+  });
+
+  it('POST /api/conversations/:jid/bookings exige serviço, data e hora (422)', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const r = await fetch(`${base}/api/conversations/5511%40s.whatsapp.net/bookings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service: 'Corte' }),
+      });
+      expect(r.status).toBe(422);
+    });
+  });
+
+  it('PUT /api/bookings/:id/reschedule remarca pela ficha', async () => {
+    const booking = {
+      id: 8,
+      clientJid: '5511999999999@s.whatsapp.net',
+      clientName: 'João',
+      service: 'Corte',
+      price: 70,
+      date: '2026-09-23',
+      time: '16:00',
+      status: 'confirmado' as const,
+      createdAt: '2026-09-01T00:00:00.000Z',
+      notifiedAt: null,
+    };
+    let received: unknown = null;
+    await withServer(
+      makeDeps({
+        rescheduleBooking: async (id, input) => {
+          received = { id, ...input };
+          return { ok: true, booking };
+        },
+      }),
+      async (base) => {
+        const r = await fetch(`${base}/api/bookings/8/reschedule`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: '2026-09-23', time: '16:00' }),
+        });
+        expect(r.status).toBe(200);
+        expect(((await r.json()) as { time: string }).time).toBe('16:00');
+        expect(received).toEqual({ id: 8, date: '2026-09-23', time: '16:00', professional: null });
+      },
+    );
+  });
+
+  it('PUT /api/bookings/:id/reschedule responde 404 quando não encontra', async () => {
+    await withServer(
+      makeDeps({ rescheduleBooking: async () => ({ ok: false, code: 'not_found', error: 'Agendamento não encontrado.' }) }),
+      async (base) => {
+        const r = await fetch(`${base}/api/bookings/999/reschedule`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: '2026-09-23', time: '16:00' }),
+        });
+        expect(r.status).toBe(404);
+      },
+    );
+  });
+
+  it('PUT /api/bookings/:id/reschedule exige data e hora (422)', async () => {
+    await withServer(makeDeps(), async (base) => {
+      const r = await fetch(`${base}/api/bookings/8/reschedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(r.status).toBe(422);
     });
   });
 
