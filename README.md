@@ -8,6 +8,12 @@ Bot de WhatsApp da **Ismerim Barbearia**: conecta o WhatsApp da loja (Baileys), 
 
 ---
 
+## Documentação
+
+Documentação completa em [`docs/`](docs/README.md): funcionalidades, arquitetura, agendamento e atendimento humano, API do painel, configuração, operação/Docker, CI/CD e troubleshooting.
+
+---
+
 ## Como usar
 
 ```powershell
@@ -110,6 +116,7 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 ### Atendimento humano (pausa)
 - Ao enviar uma mensagem pelo painel, o agente **pausa** naquela conversa.
 - Ele **retoma sozinho** quando o cliente voltar a falar após `HUMAN_PAUSE_MINUTES` (ou pelo botão "Voltar para o agente de IA").
+- Com a IA pausada, o atendente **agenda e remarca** o corte direto na **ficha do cliente** (aba Conversas): formulário com serviço/data/hora/profissional e botão **Remarcar** em cada agendamento ativo — com as mesmas validações e notificações (admin + profissional) do fluxo normal.
 
 ### Contatos
 - Todo cliente que manda mensagem tem **nome + telefone real** salvos (quando o WhatsApp entrega).
@@ -125,6 +132,7 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 Abas: **WhatsApp** (QR/status) · **Agendamentos** (status + marcar feito) · **Profissionais** (cadastro + telefone privado) · **Conversas** (inbox estilo WhatsApp, envio em massa, exportar contatos) · **Agente** · **Catálogo** · **Config**.
 
 - O painel **lembra a aba ativa** ao recarregar.
+- Na aba **Conversas**, cada coluna (lista, chat, ficha) tem **rolagem independente** e a página fica fixa; a lista é **compacta** (filtros em linha, itens com badge inline) para caber mais conversas.
 - O telefone do profissional é **privado**: nunca aparece no agente/cliente/CSV.
 
 ---
