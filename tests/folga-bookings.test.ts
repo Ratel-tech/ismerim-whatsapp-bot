@@ -1,11 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../src/store.js';
-import { validateAndCreateBooking } from '../src/bookings.js';
+import { validateAndCreateBooking, validateAndRescheduleBooking } from '../src/bookings.js';
 import type { Catalog } from '../src/catalog.js';
-import type { Profissional } from '../src/profissionais.js';
 
 const tmp: string[] = [];
 afterEach(() => { for (const f of tmp.splice(0)) fs.rmSync(f, { force: true }); vi.useRealTimers(); });
@@ -21,7 +20,7 @@ const catalog: Catalog = {
 };
 
 describe('folga bloqueia agendamento', () => {
-  it('rejeita agendar com o profissional no dia de folga dele', () => {
+  it('permite agendar fora do dia de folga', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-08T12:00:00')); // quinta
     const store = makeStore();
@@ -29,8 +28,6 @@ describe('folga bloqueia agendamento', () => {
     store.setFolga(juan.id, { folgaDia: 4 }); // quinta
     const out = validateAndCreateBooking(store, catalog, { jid: 'x@s.whatsapp.net', clientName: 'Ana', serviceName: 'Corte', date: '2026-10-09', time: '10:00', professionalName: 'JUAN' }, store.listProfissionais());
     expect(out.ok).toBe(true); // sexta ok
-    const sexta = out;
-    expect(sexta.ok).toBe(true);
   });
 
   it('rejeita no dia de folga', () => {
@@ -52,6 +49,64 @@ describe('folga bloqueia agendamento', () => {
     const juan = store.addProfissional({ nome: 'JUAN' });
     store.setFolga(juan.id, { folgaDia: 4 });
     const out = validateAndCreateBooking(store, catalog, { jid: 'x@s.whatsapp.net', clientName: 'Ana', serviceName: 'Corte', date: '2026-10-15', time: '10:00' }, store.listProfissionais());
+    expect(out.ok).toBe(true);
+  });
+});
+
+describe('folga bloqueia remarcacao', () => {
+  it('remarcar informando profissional em folga no novo dia -> rejeitado', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00')); // quinta
+    const store = makeStore();
+    const juan = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    store.setFolga(juan.id, { folgaDia: 4 }); // quinta
+    store.addBooking({ clientJid: 'x@s.whatsapp.net', clientName: 'Ana', service: 'Corte', price: 70, date: '2026-10-09', time: '10:00' }); // sexta
+    const out = validateAndRescheduleBooking(store, catalog, store.listProfissionais(), {
+      jid: 'x@s.whatsapp.net',
+      originalDate: '2026-10-09',
+      originalTime: '10:00',
+      date: '2026-10-15',
+      time: '10:00',
+      professionalName: 'JUAN',
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.code).toBe('professional_folga');
+  });
+
+  it('remarcar sem informar profissional (usa o original) para folga dele -> rejeitado', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00')); // quinta
+    const store = makeStore();
+    const juan = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    store.setFolga(juan.id, { folgaDia: 4 }); // quinta
+    store.addBooking({ clientJid: 'x@s.whatsapp.net', clientName: 'Ana', service: 'Corte', price: 70, date: '2026-10-09', time: '10:00', professionalId: juan.id, professionalName: 'JUAN' }); // sexta
+    const out = validateAndRescheduleBooking(store, catalog, store.listProfissionais(), {
+      jid: 'x@s.whatsapp.net',
+      originalDate: '2026-10-09',
+      originalTime: '10:00',
+      date: '2026-10-15',
+      time: '10:00',
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.code).toBe('professional_folga');
+  });
+
+  it('remarcar agendamento sem profissional -> permitido', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T12:00:00')); // quinta
+    const store = makeStore();
+    const juan = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    store.setFolga(juan.id, { folgaDia: 4 }); // quinta
+    store.addBooking({ clientJid: 'x@s.whatsapp.net', clientName: 'Ana', service: 'Corte', price: 70, date: '2026-10-09', time: '10:00' }); // sexta
+    const out = validateAndRescheduleBooking(store, catalog, store.listProfissionais(), {
+      jid: 'x@s.whatsapp.net',
+      originalDate: '2026-10-09',
+      originalTime: '10:00',
+      date: '2026-10-15',
+      time: '10:00',
+    });
     expect(out.ok).toBe(true);
   });
 });
