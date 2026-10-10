@@ -7,6 +7,10 @@ export interface Profissional {
   horarioFim: string; // HH:MM (vazio = não definido)
   ativo: boolean;
   createdAt: string;
+  /** Preferencia recorrente de folga: 1=segunda ... 6=sabado. null/undefined = nunca definiu. */
+  folgaDia?: number | null;
+  /** Decisao da semana corrente. dia=null = "nao vou folgar nesta semana". */
+  folgaSemana?: { semanaId: string; dia: number | null } | null;
 }
 
 /**
