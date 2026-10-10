@@ -63,4 +63,32 @@ describe('comando de folga do barbeiro', () => {
     await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'não vou folgar', name: 'JUAN', phone: p.telefone });
     expect(store.getProfissional(p.id)!.folgaSemana?.dia).toBeNull();
   });
+
+  it('nao intercepta mensagem nao relacionada enquanto pendente (fluxo de operador segue)', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    const changes: unknown[] = [];
+    const opJson = JSON.stringify({
+      intent: 'agenda',
+      reply: 'agenda-ok',
+      observations: [],
+      booking: { requested: false, confirmed: false, acao: 'criar', service: null, professional: null, date: null, time: null, client_name: null },
+    });
+    const agent = new Agent({
+      store,
+      complete: async () => opJson,
+      sendText: async (_jid: string, text: string) => { replies.push(text); return true; },
+      adminPhone: '5521999999999',
+      onFolgaChange: (info: { profissionalId: number; nome: string; dia: number | null }) => changes.push(info),
+      onListAgenda: async () => 'agenda-ok',
+      debounceMs: 0,
+    } as never);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'ver agenda', name: 'JUAN', phone: p.telefone });
+    expect(replies.join(' ')).toContain('agenda-ok');
+    expect(replies.join(' ')).not.toMatch(/folga/i);
+    expect(changes).toHaveLength(0);
+  });
 });

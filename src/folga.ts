@@ -98,7 +98,7 @@ export function parseFolgaAnswer(text: string): FolgaParsed {
 export function buildFolgaQuestion(nome: string, diasLivres: number[]): string {
   const livres = diasLivres.length ? diasLivres.map(nomeDia).join(', ') : '(nenhum dia livre)';
   return [
-    `Oi, ${nome}! Fechamos hoje (domingo) e as folgas da semana são definidas agora.`,
+    `Oi, ${nome}! Vamos definir as folgas desta semana.`,
     '',
     `Dias livres: ${livres}.`,
     'Responda só o dia (ex.: *quarta*) ou *não vou folgar* nesta semana.',

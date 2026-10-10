@@ -87,7 +87,7 @@ Ao definir o dia `D` para o barbeiro na semana corrente, se algum **outro barbei
 ### 5.3 Parser (sem IA)
 `parseFolgaAnswer(texto): { tipo: 'dia', dia: number } | { tipo: 'sem_folga' } | { tipo: 'invalido' }`.
 
-- Dias: `segunda/sábado` e variações, abreviações (`seg`, `ter`, `qua`, `qui`, `sex`, `sab`) e números `2..6`.
+- Dias: `segunda/sábado` e variações, abreviações (`seg`, `ter`, `qua`, `qui`, `sex`, `sab`) e números `1..6` (1=segunda ... 6=sábado; domingo inválido).
 - Sem folga: `não vou folgar`, `nao folgo`, `folgo`, `sem folga`, `nenhum`, `-`.
 - Ambíguo/inválido → pergunta de novo.
 - Aplicável tanto à resposta da cobrança quanto ao comando espontâneo.

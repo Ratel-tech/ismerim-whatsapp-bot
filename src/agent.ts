@@ -260,7 +260,7 @@ export class Agent {
       vinculos: this.opts.store.listVinculos(),
     });
     if (papelResolvido.papel === 'profissional' && papelResolvido.profissionalId != null) {
-      const folgaReply = this.tryFolgaComando(jid, papelResolvido.profissionalId, text);
+      const folgaReply = this.tryFolgaComando(papelResolvido.profissionalId, text);
       if (folgaReply) {
         await this.reply(jid, folgaReply);
         return;
@@ -419,7 +419,7 @@ export class Agent {
   }
 
   /** Comando determinístico de folga do barbeiro (não passa pela IA). */
-  private tryFolgaComando(jid: string, profissionalId: number, text: string): string | null {
+  private tryFolgaComando(profissionalId: number, text: string): string | null {
     const store = this.opts.store;
     const prof = store.getProfissional(profissionalId);
     if (!prof) return null;
@@ -431,7 +431,9 @@ export class Agent {
 
     const parsed = parseFolgaAnswer(text);
     if (parsed.tipo === 'invalido') {
-      if (!pendente) return null;
+      // Só re-pergunta se o texto de fato menciona folga; caso contrário deixa o
+      // fluxo de operador (ex.: "ver agenda") seguir normalmente.
+      if (!pendente || !menciona) return null;
       const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
       return buildFolgaQuestion(prof.nome, livres);
     }

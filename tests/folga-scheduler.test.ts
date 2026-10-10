@@ -27,7 +27,9 @@ describe('folga scheduler', () => {
       askWeekday: 0, askHour: 9, remindHour: 9,
     });
     expect(r.perguntados).toBe(1);
-    expect(sent[0]).toContain('domingo');
+    expect(sent[0]).toContain('JUAN');
+    expect(sent[0]).toContain('folga');
+    expect(sent[0]).not.toContain('domingo');
   });
 
   it('nao pergunta duas vezes na mesma semana', async () => {
@@ -53,6 +55,19 @@ describe('folga scheduler', () => {
     const ter = await processFolgaSchedule({ ...deps, now: new Date('2026-10-13T09:30:00') });
     expect(ter.perguntados).toBe(0);
     expect(ter.cobrados).toBe(0);
+  });
+
+  it('nao cobra no mesmo dia da pergunta (lembrete so a partir do dia seguinte)', async () => {
+    const store = makeStore();
+    store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const deps = { store, send: async () => true, adminPhone: '', askWeekday: 0, askHour: 9, remindHour: 9 };
+    const dom1 = await processFolgaSchedule({ ...deps, now: new Date('2026-10-11T09:05:00') }); // domingo pergunta
+    expect(dom1.perguntados).toBe(1);
+    const dom2 = await processFolgaSchedule({ ...deps, now: new Date('2026-10-11T09:06:00') }); // mesmo dia
+    expect(dom2.perguntados).toBe(0);
+    expect(dom2.cobrados).toBe(0);
+    const seg = await processFolgaSchedule({ ...deps, now: new Date('2026-10-12T09:05:00') }); // dia seguinte
+    expect(seg.cobrados).toBe(1);
   });
 
   it('ignora profissional sem telefone', async () => {

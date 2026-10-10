@@ -50,7 +50,8 @@ export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ 
       const livres = DIAS_UTEIS.filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
       const ok = await deps.send(jid, buildFolgaQuestion(prof.nome, livres)).catch(() => false);
       if (ok) {
-        deps.store.setFolgaControle(prof.id, { semanaId: week, askedAt: now.toISOString(), remindedAt: null, answeredAt: null });
+        // remindedAt = agora: o lembrete só pode sair a partir do dia seguinte (guard !mesmoDia).
+        deps.store.setFolgaControle(prof.id, { semanaId: week, askedAt: now.toISOString(), remindedAt: now.toISOString(), answeredAt: null });
         perguntados += 1;
       } else {
         log('warn', `Folga: falha ao perguntar a ${prof.nome} (WhatsApp desconectado).`);
