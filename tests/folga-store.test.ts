@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../src/store.js';
+import { semanaDaFolga } from '../src/folga.js';
 
 const tmp: string[] = [];
 afterEach(() => { for (const f of tmp.splice(0)) fs.rmSync(f, { force: true }); });
@@ -37,5 +38,14 @@ describe('store — folga', () => {
     expect(pub.folgaSemanaDia).toBe(3);
     expect(JSON.stringify(pub)).not.toContain('telefone');
     expect(JSON.stringify(pub)).not.toContain('5521988887777');
+  });
+
+  it('DTO usa o id da semana da folga (override gravado no domingo)', () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const domingo = new Date('2026-10-11T12:00:00');
+    store.setFolga(p.id, { folgaDia: 4, folgaSemana: { semanaId: semanaDaFolga(domingo), dia: null } });
+    expect(store.listProfissionaisPublic(domingo)[0]!.folgaSemanaDia).toBeNull();
+    expect(store.listProfissionaisPublic(new Date('2026-10-12T12:00:00'))[0]!.folgaSemanaDia).toBeNull();
   });
 });

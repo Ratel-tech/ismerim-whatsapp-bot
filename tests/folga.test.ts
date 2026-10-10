@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DIAS_UTEIS, DIA_NOMES, nomeDia, semanaId, weekdayOf,
+  DIAS_UTEIS, DIA_NOMES, nomeDia, semanaId, semanaDaFolga, weekdayOf,
   folgaEfetiva, folgaNaData, diasOcupados, parseFolgaAnswer,
 } from '../src/folga.js';
 import type { Profissional } from '../src/profissionais.js';
@@ -26,6 +26,15 @@ describe('folga — nomes e semana', () => {
     expect(weekdayOf('2026-10-08')).toBe(4); // quinta
     expect(weekdayOf('2026-10-11')).toBe(0); // domingo
   });
+
+  it('semanaDaFolga: domingo e a segunda seguinte tem o mesmo id', () => {
+    const domingo = new Date('2026-10-11T12:00:00'); // domingo
+    const segunda = new Date('2026-10-12T12:00:00'); // segunda
+    expect(semanaDaFolga(segunda)).toBe('2026-W42');
+    expect(semanaDaFolga(domingo)).toBe(semanaDaFolga(segunda));
+    // dias uteis usam o id ISO corrente
+    expect(semanaDaFolga(new Date('2026-10-14T12:00:00'))).toBe(semanaId(new Date('2026-10-14T12:00:00')));
+  });
 });
 
 describe('folga efetiva e na data', () => {
@@ -43,6 +52,12 @@ describe('folga efetiva e na data', () => {
     const p = prof({ folgaDia: 4, folgaSemana: { semanaId: '2026-W41', dia: null } });
     expect(folgaNaData(p, '2026-10-08', new Date('2026-10-08T12:00:00'))).toBeNull(); // semana atual, sem folga
     expect(folgaNaData(p, '2026-10-22', new Date('2026-10-08T12:00:00'))).toBe(4); // semana futura, recorrente
+  });
+  it('folgaNaData: override gravado no domingo vale para a semana seguinte', () => {
+    const domingo = new Date('2026-10-11T12:00:00');
+    const p = prof({ folgaDia: 4, folgaSemana: { semanaId: semanaDaFolga(domingo), dia: null } });
+    expect(folgaNaData(p, '2026-10-12', domingo)).toBeNull(); // segunda: override "sem folga" vale
+    expect(folgaNaData(p, '2026-10-16', domingo)).toBeNull(); // sexta: override "sem folga" vale
   });
 });
 

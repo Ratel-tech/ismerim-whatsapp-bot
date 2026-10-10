@@ -1,4 +1,4 @@
-import { DIAS_UTEIS, buildFolgaQuestion, buildFolgaReminder, diasOcupados, semanaId } from './folga.js';
+import { DIAS_UTEIS, buildFolgaQuestion, buildFolgaReminder, diasOcupados, semanaDaFolga } from './folga.js';
 import { log } from './log.js';
 import type { Store } from './store.js';
 
@@ -21,16 +21,6 @@ function mesmoDia(a: string | null, now: Date): boolean {
   if (!a) return false;
   const d = new Date(a);
   return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-}
-
-/**
- * Semana da folga (segunda a sabado). O domingo (loja fechada) pertence a semana
- * ISO anterior; a folga de quem responde no domingo vale para a semana seguinte.
- * Ancora o ciclo na segunda-feira para pergunta e cobranca compartilharem o mesmo id.
- */
-function semanaDaFolga(now: Date): string {
-  const ref = now.getDay() === 0 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) : now;
-  return semanaId(ref);
 }
 
 export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ perguntados: number; cobrados: number }> {

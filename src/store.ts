@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
 import { normalizeTelefone, toPublicProfissional, type Profissional } from './profissionais.js';
-import { folgaEfetiva, semanaId } from './folga.js';
+import { folgaEfetiva, semanaDaFolga } from './folga.js';
 import type { Vinculo } from './papeis.js';
 
 export interface StoredClient {
@@ -315,7 +315,7 @@ export class Store {
    * getProfissional()/listProfissionais() para uso interno (notificação).
    */
   listProfissionaisPublic(now: Date = new Date()): ReturnType<typeof toPublicProfissional>[] {
-    const week = semanaId(now);
+    const week = semanaDaFolga(now);
     return this.db.profissionais.map((p) => ({ ...toPublicProfissional(p), folgaSemanaDia: folgaEfetiva(p, week) }));
   }
 

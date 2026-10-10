@@ -21,6 +21,17 @@ export function semanaId(date: Date): string {
   return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
+/**
+ * Identificador da SEMANA DA FOLGA (ciclo domingo..sábado). O domingo (loja fechada)
+ * pertence à semana ISO anterior, então é ancorado na segunda-feira seguinte — assim
+ * a pergunta no domingo, a cobrança durante a semana e o `folgaSemana.semanaId` do
+ * comando compartilham o MESMO id.
+ */
+export function semanaDaFolga(date: Date): string {
+  const ref = date.getDay() === 0 ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1) : date;
+  return semanaId(ref);
+}
+
 /** Dia da semana (0=domingo..6=sabado) de uma data YYYY-MM-DD. */
 export function weekdayOf(dateISO: string): number {
   return new Date(`${dateISO}T12:00:00`).getDay();
@@ -32,8 +43,8 @@ export function folgaEfetiva(prof: Profissional, semana: string): number | null 
 }
 
 export function folgaNaData(prof: Profissional, dateISO: string, hoje: Date = new Date()): number | null {
-  const semanaData = semanaId(new Date(`${dateISO}T12:00:00`));
-  const semanaHoje = semanaId(hoje);
+  const semanaData = semanaDaFolga(new Date(`${dateISO}T12:00:00`));
+  const semanaHoje = semanaDaFolga(hoje);
   return semanaData === semanaHoje ? folgaEfetiva(prof, semanaHoje) : (prof.folgaDia ?? null);
 }
 
