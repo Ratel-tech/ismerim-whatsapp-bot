@@ -78,12 +78,9 @@ export function parseFolgaAnswer(text: string): FolgaParsed {
   for (const [re, dia] of NOME_PARA_DIA) {
     if (re.test(t)) return dia === 0 ? { tipo: 'invalido' } : { tipo: 'dia', dia };
   }
-  // Numeros: 1=domingo ... 6=sabado (opcional com ª/a/º). Doming o(1) e invalido.
+  // Numeros: 1=segunda ... 6=sabado (opcional com ª/a/º), alinhado a folgaDia/DIA_NOMES.
   const num = t.match(/\b([1-6])\s*[ªaº]?\b/);
-  if (num) {
-    const dia = Number(num[1]) === 1 ? 0 : Number(num[1]); // 1=domingo
-    return dia === 0 ? { tipo: 'invalido' } : { tipo: 'dia', dia };
-  }
+  if (num) return { tipo: 'dia', dia: Number(num[1]) };
   return { tipo: 'invalido' };
 }
 
