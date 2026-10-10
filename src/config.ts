@@ -37,6 +37,11 @@ export interface AppConfig {
   humanPauseMinutes: number;
   /** Minutos de antecedência do lembrete ao cliente (padrão 120 = 2h; 0 = desliga). */
   reminderMinutesBefore: number;
+  /** Rotina semanal de folga dos barbeiros. */
+  folgaAskEnabled: boolean;
+  folgaAskWeekday: number;
+  folgaAskHour: number;
+  folgaRemindHour: number;
   dataDir: string;
   dbFile: string;
   logFile: string;
@@ -62,6 +67,10 @@ export const config: AppConfig = {
   panelToken: process.env.PANEL_TOKEN ?? '',
   humanPauseMinutes: Number(process.env.HUMAN_PAUSE_MINUTES ?? 30),
   reminderMinutesBefore: Number(process.env.REMINDER_MINUTES_BEFORE ?? 120),
+  folgaAskEnabled: process.env.FOLGA_ASK_ENABLED !== 'false',
+  folgaAskWeekday: Number(process.env.FOLGA_ASK_WEEKDAY ?? 0),
+  folgaAskHour: Number(process.env.FOLGA_ASK_HOUR ?? 9),
+  folgaRemindHour: Number(process.env.FOLGA_REMIND_HOUR ?? 9),
   dataDir,
   dbFile: path.join(dataDir, 'db.json'),
   logFile: path.join(dataDir, 'logs.txt'),

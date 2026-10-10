@@ -31,6 +31,8 @@ import {
   notifyProfessionalReschedule,
 } from './notifier.js';
 import { isProviderId, listProviders } from './providers.js';
+import { processFolgaSchedule } from './folga-scheduler.js';
+import { nomeDia } from './folga.js';
 
 fs.mkdirSync(config.dataDir, { recursive: true });
 fs.mkdirSync(config.sessionDir, { recursive: true });
@@ -245,6 +247,11 @@ const agent = new Agent({
     }
     log('info', `Agendamento #${out.booking?.id} marcado como feito pelo operador.`);
     return out.message;
+  },
+  onFolgaChange: (info) => {
+    if (!config.adminPhone) return;
+    const quando = info.dia == null ? 'não folga esta semana' : nomeDia(info.dia);
+    void whatsapp.sendText(`${config.adminPhone}@s.whatsapp.net`, `🗓️ FOLGA DEFINIDA\n\nProfissional: ${info.nome}\n${quando}.`).catch(() => false);
   },
 });
 
@@ -507,6 +514,16 @@ setInterval(() => {
     store,
     send: (jid, text) => whatsapp.sendText(jid, text),
   }).catch((err) => log('error', `Falha ao reenviar notificações ao profissional: ${(err as Error).message}`));
+  if (config.folgaAskEnabled) {
+    void processFolgaSchedule({
+      store,
+      send: (jid, text) => whatsapp.sendText(jid, text),
+      adminPhone: config.adminPhone,
+      askWeekday: config.folgaAskWeekday,
+      askHour: config.folgaAskHour,
+      remindHour: config.folgaRemindHour,
+    }).catch((err) => log('error', `Falha na rotina de folga: ${(err as Error).message}`));
+  }
 }, 60_000);
 
 // Lembrete ao cliente ~N minutos antes do agendamento (padrão 2h).
