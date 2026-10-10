@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../src/store.js';
+import { semanaDaFolga } from '../src/folga.js';
 import { processFolgaSchedule } from '../src/folga-scheduler.js';
 
 const tmp: string[] = [];
@@ -48,8 +49,9 @@ describe('folga scheduler', () => {
     const seg2 = await processFolgaSchedule({ ...deps, now: new Date('2026-10-12T15:00:00') }); // segunda, ja cobrou
     expect(seg2.cobrados).toBe(0);
     // respondeu -> para de cobrar
-    store.setFolgaControle(p.id, { semanaId: '2026-W41', answeredAt: new Date().toISOString() });
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date('2026-10-13T09:30:00')), answeredAt: new Date().toISOString() });
     const ter = await processFolgaSchedule({ ...deps, now: new Date('2026-10-13T09:30:00') });
+    expect(ter.perguntados).toBe(0);
     expect(ter.cobrados).toBe(0);
   });
 
