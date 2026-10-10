@@ -3,6 +3,7 @@ import { loadCatalog, resolveService } from './catalog.js';
 import { loadAgentConfig } from './agent-config.js';
 import { buildOperatorPrompt, buildSystemPrompt } from './prompt.js';
 import { resolverPapel, type PapelResolvido } from './papeis.js';
+import { DIAS_UTEIS, buildFolgaConfirmation, buildFolgaQuestion, diasOcupados, nomeDia, parseFolgaAnswer, semanaDaFolga } from './folga.js';
 import type { Store, PendingBooking } from './store.js';
 import { log } from './log.js';
 
@@ -101,6 +102,8 @@ export interface AgentOptions {
   onOperatorCreate?(input: OperatorCreateInput): Promise<string>;
   /** Operador marcou um agendamento como feito. */
   onMarkDone?(input: MarkDoneInput): Promise<string>;
+  /** Chamado quando um barbeiro define/muda a folga (para notificar o admin). */
+  onFolgaChange?: (info: { profissionalId: number; nome: string; dia: number | null }) => void;
   /** Tempo (ms) de pausa após um humano responder; passou disso, o agente retoma. 0 = nunca. */
   humanPauseMs?: number;
   /**
@@ -256,6 +259,13 @@ export class Agent {
       profissionais: this.opts.store.listProfissionais(),
       vinculos: this.opts.store.listVinculos(),
     });
+    if (papelResolvido.papel === 'profissional' && papelResolvido.profissionalId != null) {
+      const folgaReply = this.tryFolgaComando(jid, papelResolvido.profissionalId, text);
+      if (folgaReply) {
+        await this.reply(jid, folgaReply);
+        return;
+      }
+    }
     const system =
       papelResolvido.papel === 'cliente'
         ? buildSystemPrompt(catalog, agentCfg, {
@@ -406,6 +416,41 @@ export class Agent {
     }
 
     await this.reply(jid, reply);
+  }
+
+  /** Comando determinístico de folga do barbeiro (não passa pela IA). */
+  private tryFolgaComando(jid: string, profissionalId: number, text: string): string | null {
+    const store = this.opts.store;
+    const prof = store.getProfissional(profissionalId);
+    if (!prof) return null;
+    const week = semanaDaFolga(new Date());
+    const controle = store.getFolgaControle(profissionalId);
+    const pendente = controle?.semanaId === week && !controle.answeredAt;
+    const menciona = /\bfolg/i.test(text) || /n[aã]o\s+(vou\s+)?folg/i.test(text);
+    if (!pendente && !menciona) return null;
+
+    const parsed = parseFolgaAnswer(text);
+    if (parsed.tipo === 'invalido') {
+      if (!pendente) return null;
+      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
+      return buildFolgaQuestion(prof.nome, livres);
+    }
+    if (parsed.tipo === 'sem_folga') {
+      store.setFolga(profissionalId, { folgaSemana: { semanaId: week, dia: null } });
+      store.setFolgaControle(profissionalId, { semanaId: week, answeredAt: new Date().toISOString() });
+      this.opts.onFolgaChange?.({ profissionalId, nome: prof.nome, dia: null });
+      return buildFolgaConfirmation(null);
+    }
+    const ocupados = diasOcupados(store.listProfissionais(), week, profissionalId);
+    if (ocupados.has(parsed.dia)) {
+      const livres = DIAS_UTEIS.filter((d) => !ocupados.has(d));
+      const lista = livres.length ? livres.map(nomeDia).join(', ') : '(nenhum dia livre — responda "não vou folgar")';
+      return `Esse dia já está com outro barbeiro. Livres: ${lista}. Qual você quer?`;
+    }
+    store.setFolga(profissionalId, { folgaDia: parsed.dia, folgaSemana: { semanaId: week, dia: parsed.dia } });
+    store.setFolgaControle(profissionalId, { semanaId: week, answeredAt: new Date().toISOString() });
+    this.opts.onFolgaChange?.({ profissionalId, nome: prof.nome, dia: parsed.dia });
+    return buildFolgaConfirmation(parsed.dia);
   }
 
   /** Turno de OPERADOR (ADMIN/BARBEIRO): ver agenda, criar p/ cliente, marcar feito. */

@@ -1,0 +1,66 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { Store } from '../src/store.js';
+import { Agent } from '../src/agent.js';
+
+const tmp: string[] = [];
+afterEach(() => { for (const f of tmp.splice(0)) fs.rmSync(f, { force: true }); });
+function makeStore(): Store {
+  const f = path.join(os.tmpdir(), `fcmd-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+  tmp.push(f);
+  return new Store(f);
+}
+
+function makeAgent(store: Store, replies: string[], changes: unknown[]) {
+  return new Agent({
+    store,
+    sendText: async (_jid: string, text: string) => { replies.push(text); return true; },
+    adminPhone: '5521999999999',
+    onFolgaChange: (info: { profissionalId: number; nome: string; dia: number | null }) => changes.push(info),
+    debounceMs: 0,
+  } as never);
+}
+
+describe('comando de folga do barbeiro', () => {
+  it('grava o dia quando o barbeiro responde a pergunta pendente', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    // marca a semana como "perguntada"
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    const changes: unknown[] = [];
+    const agent = makeAgent(store, replies, changes);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'quarta', name: 'JUAN', phone: p.telefone });
+    expect(store.getProfissional(p.id)!.folgaDia).toBe(3);
+    expect(store.getFolgaControle(p.id)!.answeredAt).toBeTruthy();
+    expect(replies.join(' ')).toMatch(/quarta/i);
+    expect(changes).toHaveLength(1);
+  });
+
+  it('recusa dia ocupado e lista os livres', async () => {
+    const store = makeStore();
+    const { semanaDaFolga } = await import('../src/folga.js');
+    const week = semanaDaFolga(new Date());
+    const a = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const b = store.addProfissional({ nome: 'GEANI', telefone: '5521977778888' });
+    store.setFolga(a.id, { folgaDia: 3 });
+    store.setFolgaControle(a.id, { semanaId: week, answeredAt: 'x' });
+    store.setFolgaControle(b.id, { semanaId: week });
+    const replies: string[] = [];
+    const agent = makeAgent(store, replies, []);
+    await agent.handleInboundMessage({ jid: `${b.telefone}@s.whatsapp.net`, text: 'quarta', name: 'GEANI', phone: b.telefone });
+    expect(store.getProfissional(b.id)!.folgaDia ?? null).toBeNull();
+    expect(replies.join(' ')).toMatch(/livre|ocupad/i);
+  });
+
+  it('aceita "nao vou folgar"', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const agent = makeAgent(store, [], []);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'não vou folgar', name: 'JUAN', phone: p.telefone });
+    expect(store.getProfissional(p.id)!.folgaSemana?.dia).toBeNull();
+  });
+});
