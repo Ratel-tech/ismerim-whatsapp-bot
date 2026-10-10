@@ -64,6 +64,7 @@ describe('folga — parser', () => {
     expect(parseFolgaAnswer('terca')).toEqual({ tipo: 'dia', dia: 2 });
     expect(parseFolgaAnswer('6ª')).toEqual({ tipo: 'dia', dia: 6 }); // sabado
     expect(parseFolgaAnswer('2')).toEqual({ tipo: 'dia', dia: 2 }); // terca
+    expect(parseFolgaAnswer('vou folgar quinta')).toEqual({ tipo: 'dia', dia: 4 }); // quinta
   });
   it('reconhece "nao vou folgar"', () => {
     expect(parseFolgaAnswer('não vou folgar')).toEqual({ tipo: 'sem_folga' });

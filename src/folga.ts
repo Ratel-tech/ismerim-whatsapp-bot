@@ -72,7 +72,7 @@ function normalize(text: string): string {
 export function parseFolgaAnswer(text: string): FolgaParsed {
   const t = normalize(text);
   if (!t) return { tipo: 'invalido' };
-  if (/\b(nao\s*(vou\s*)?folgar|nao\s*folgo|sem\s*folga|folgar|nao\s*vou\s*descansar|nenhum|nenhuma)\b/.test(t) || t === '-') {
+  if (/\b(nao\s*(vou\s*)?folgar|nao\s*folgo|sem\s*folga|nao\s*vou\s*descansar|nenhum|nenhuma)\b/.test(t) || t === '-') {
     return { tipo: 'sem_folga' };
   }
   for (const [re, dia] of NOME_PARA_DIA) {
