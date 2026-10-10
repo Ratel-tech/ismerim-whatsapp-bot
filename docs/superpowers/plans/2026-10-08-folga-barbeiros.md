@@ -1057,7 +1057,7 @@ Adicionar em `tests/http.test.ts` (dentro do describe existente):
       makeDeps({ getProfissionais: () => [{ id: 1, nome: 'JUAN', horarioInicio: '10:00', horarioFim: '20:00', ativo: true, hasTelefone: true, folgaDia: 3, folgaSemanaDia: 3 }] }),
       async (base) => {
         const html = await (await fetch(`${base}/`)).text();
-        expect(html).toContain('folga'); // coluna/rotulo presente no HTML do painel
+        expect(html).toContain('Folga'); // coluna/rotulo presente no HTML do painel
       },
     );
   });
