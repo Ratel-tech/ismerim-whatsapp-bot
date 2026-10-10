@@ -176,14 +176,25 @@ export function weekdayOf(dateISO: string): number {
   return new Date(`${dateISO}T12:00:00`).getDay();
 }
 
+/**
+ * Semana da FOLGA (ciclo domingo..sabado). O domingo (loja fechada) inicia o
+ * ciclo e pertence a semana do dia seguinte (segunda); segunda..sabado usam o
+ * proprio id ISO. E o id canonico de `folgaSemana.semanaId` e do controle de
+ * cobranca — use SEMPRE esta funcao para a semana da folga, nao `semanaId`.
+ */
+export function semanaDaFolga(date: Date): string {
+  const ref = date.getDay() === 0 ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1) : date;
+  return semanaId(ref);
+}
+
 export function folgaEfetiva(prof: Profissional, semana: string): number | null {
   if (prof.folgaSemana && prof.folgaSemana.semanaId === semana) return prof.folgaSemana.dia;
   return prof.folgaDia ?? null;
 }
 
 export function folgaNaData(prof: Profissional, dateISO: string, hoje: Date = new Date()): number | null {
-  const semanaData = semanaId(new Date(`${dateISO}T12:00:00`));
-  const semanaHoje = semanaId(hoje);
+  const semanaData = semanaDaFolga(new Date(`${dateISO}T12:00:00`));
+  const semanaHoje = semanaDaFolga(hoje);
   return semanaData === semanaHoje ? folgaEfetiva(prof, semanaHoje) : (prof.folgaDia ?? null);
 }
 
@@ -280,7 +291,7 @@ git commit -m "feat: dominio de folga (semana, folga efetiva e parser)"
 - Test: `tests/folga-store.test.ts`
 
 **Interfaces:**
-- Consumes: `semanaId`, `folgaEfetiva` de `src/folga.js`.
+- Consumes: `semanaDaFolga`, `folgaEfetiva` de `src/folga.js`.
 - Produces:
   - `store.setFolga(id: number, patch: { folgaDia?: number | null; folgaSemana?: { semanaId: string; dia: number | null } | null }): Profissional | null`
   - `store.getFolgaControle(id: number): FolgaControle | null`
@@ -343,7 +354,7 @@ Expected: FAIL — `store.setFolga is not a function`.
 
 - [ ] **Step 3: Implementar no `store.ts`**
 
-1. Import no topo: `import { folgaEfetiva, semanaId } from './folga.js';`
+1. Import no topo: `import { folgaEfetiva, semanaDaFolga } from './folga.js';`
 2. Adicionar tipo e campo no `Db`:
 
 ```ts
@@ -387,7 +398,7 @@ if (!parsed.folgaControle || typeof parsed.folgaControle !== 'object' || Array.i
 
 ```ts
   listProfissionaisPublic(now: Date = new Date()): ReturnType<typeof toPublicProfissional>[] {
-    const week = semanaId(now);
+    const week = semanaDaFolga(now);
     return this.db.profissionais.map((p) => ({ ...toPublicProfissional(p), folgaSemanaDia: folgaEfetiva(p, week) }));
   }
 ```
@@ -548,7 +559,7 @@ git commit -m "feat: bloqueia agendamento no dia de folga (com cobertura)"
 - Test: `tests/folga-scheduler.test.ts`
 
 **Interfaces:**
-- Consumes: `semanaId`, `diasOcupados`, `DIAS_UTEIS`, `buildFolgaQuestion`, `buildFolgaReminder` de `src/folga.js`; `store.getFolgaControle`/`setFolgaControle`.
+- Consumes: `semanaDaFolga`, `diasOcupados`, `DIAS_UTEIS`, `buildFolgaQuestion`, `buildFolgaReminder` de `src/folga.js`; `store.getFolgaControle`/`setFolgaControle`.
 - Produces: `processFolgaSchedule(deps): Promise<{ perguntados: number; cobrados: number }>`.
 
 - [ ] **Step 1: Testes que falham**
@@ -629,7 +640,7 @@ Expected: FAIL — módulo ausente.
 
 ```ts
 import { log } from './log.js';
-import { DIAS_UTEIS, buildFolgaQuestion, buildFolgaReminder, diasOcupados, semanaId } from './folga.js';
+import { DIAS_UTEIS, buildFolgaQuestion, buildFolgaReminder, diasOcupados, semanaDaFolga } from './folga.js';
 import type { Store } from './store.js';
 
 export interface FolgaSchedulerDeps {
@@ -654,7 +665,7 @@ function mesmoDia(a: string | null, now: Date): boolean {
 
 export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ perguntados: number; cobrados: number }> {
   const now = deps.now ?? new Date();
-  const week = semanaId(now);
+  const week = semanaDaFolga(now);
   const today = now.getDay();
   const hour = now.getHours();
   const askWeekday = deps.askWeekday ?? 0;
@@ -722,7 +733,7 @@ git commit -m "feat: rotina semanal de folga (pergunta e cobranca)"
 - Test: `tests/folga-comando.test.ts`
 
 **Interfaces:**
-- Consumes: `parseFolgaAnswer`, `diasOcupados`, `DIAS_UTEIS`, `nomeDia`, `semanaId`, `buildFolgaQuestion`, `buildFolgaConfirmation`, `buildFolgaReminder`.
+- Consumes: `parseFolgaAnswer`, `diasOcupados`, `DIAS_UTEIS`, `nomeDia`, `semanaDaFolga`, `buildFolgaQuestion`, `buildFolgaConfirmation`, `buildFolgaReminder`.
 - Produces: `AgentOptions.onFolgaChange?: (info: { profissionalId: number; nome: string; dia: number | null }) => void`; interceptação em `runTurn` antes do LLM.
 
 - [ ] **Step 1: Testes que falham**
@@ -759,8 +770,8 @@ describe('comando de folga do barbeiro', () => {
     const store = makeStore();
     const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
     // marca a semana como "perguntada"
-    const { semanaId } = await import('../src/folga.js');
-    store.setFolgaControle(p.id, { semanaId: semanaId(new Date()), askedAt: new Date().toISOString() });
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
     const replies: string[] = [];
     const changes: unknown[] = [];
     const agent = makeAgent(store, replies, changes);
@@ -773,8 +784,8 @@ describe('comando de folga do barbeiro', () => {
 
   it('recusa dia ocupado e lista os livres', async () => {
     const store = makeStore();
-    const { semanaId } = await import('../src/folga.js');
-    const week = semanaId(new Date());
+    const { semanaDaFolga } = await import('../src/folga.js');
+    const week = semanaDaFolga(new Date());
     const a = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
     const b = store.addProfissional({ nome: 'GEANI', telefone: '5521977778888' });
     store.setFolga(a.id, { folgaDia: 3 });
@@ -804,7 +815,7 @@ Expected: FAIL — `folgaDia` fica null (nada implementado).
 
 - [ ] **Step 3: Implementar em `src/agent.ts`**
 
-Imports: adicionar `import { DIAS_UTEIS, buildFolgaConfirmation, buildFolgaQuestion, diasOcupados, nomeDia, parseFolgaAnswer, semanaId } from './folga.js';`
+Imports: adicionar `import { DIAS_UTEIS, buildFolgaConfirmation, buildFolgaQuestion, diasOcupados, nomeDia, parseFolgaAnswer, semanaDaFolga } from './folga.js';`
 
 Em `AgentOptions`, adicionar:
 ```ts
@@ -829,7 +840,7 @@ Adicionar o método privado na classe:
     const store = this.opts.store;
     const prof = store.getProfissional(profissionalId);
     if (!prof) return null;
-    const week = semanaId(new Date());
+    const week = semanaDaFolga(new Date());
     const controle = store.getFolgaControle(profissionalId);
     const pendente = controle?.semanaId === week && !controle.answeredAt;
     const menciona = /\bfolg/i.test(text) || /n[aã]o\s+(vou\s+)?folg/i.test(text);
@@ -1005,7 +1016,7 @@ FOLGA_ASK_HOUR=9
 FOLGA_REMIND_HOUR=9
 ```
 Em `src/index.ts`:
-1. Imports: `import { processFolgaSchedule } from './folga-scheduler.js';` e `import { buildFolgaConfirmation, DIAS_UTEIS, diasOcupados, nomeDia, semanaId } from './folga.js';` (ajustar ao que usar).
+1. Imports: `import { processFolgaSchedule } from './folga-scheduler.js';` e `import { buildFolgaConfirmation, DIAS_UTEIS, diasOcupados, nomeDia, semanaDaFolga } from './folga.js';` (ajustar ao que usar).
 2. No `new Agent({...})`, adicionar `onFolgaChange`:
 ```ts
   onFolgaChange: (info) => {
