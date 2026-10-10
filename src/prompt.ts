@@ -1,6 +1,7 @@
 import { formatHorarios, formatPreco, localDateString, type Catalog } from './catalog.js';
 import type { AgentConfig } from './agent-config.js';
 import type { ProfissionalPublic } from './profissionais.js';
+import { nomeDia } from './folga.js';
 
 export interface PromptOptions {
   clientName: string | null;
@@ -32,7 +33,10 @@ export function buildSystemPrompt(catalog: Catalog, agentCfg: AgentConfig, opts:
   const ativos = (opts.profissionais ?? []).filter((p) => p.ativo);
   const profissionais = ativos.length
     ? ativos
-        .map((p) => `- ${p.nome}${p.horarioInicio && p.horarioFim ? ` (${p.horarioInicio} às ${p.horarioFim})` : ''}`)
+        .map((p) => {
+          const folga = p.folgaSemanaDia != null ? ` — folga: ${nomeDia(p.folgaSemanaDia)}` : '';
+          return `- ${p.nome}${p.horarioInicio && p.horarioFim ? ` (${p.horarioInicio} às ${p.horarioFim})` : ''}${folga}`;
+        })
         .join('\n')
     : '- (nenhum profissional cadastrado)';
 
@@ -83,6 +87,7 @@ ${agentCfg.boas_vindas || '(sem boas-vindas definidas)'}
 10. Datas anteriores a hoje JÁ ACONTECERAM: agendamentos marcados como "JÁ PASSOU" NÃO estão mais ativos. Nunca diga que um horário passado ainda está reservado; se o cliente falar dele, diga que já passou. A seção "Agendamentos do cliente" é a fonte da verdade — não deduza que algo está agendado pelo histórico da conversa.
 11. Se o cliente JÁ TEM um agendamento e quer mudar o horário (ou o profissional), use acao="remarcar" com original_date/original_time — NUNCA crie um novo agendamento para o mesmo pedido.
 12. NÃO informe preços logo de cara. Apresente os serviços da loja normalmente, mas só fale preços quando o cliente perguntar.
+13. FOLGA DOS PROFISSIONAIS: cada profissional pode ter um dia de folga (indicado na lista "Profissionais disponíveis"). Se o cliente quiser agendar/remarcar com um profissional no dia de folga dele, NÃO agende: avise que ele folga nesse dia e ofereça outro profissional que atende (cobertura), ou pergunte se pode ser outro dia.
 
 ## Observações internas (registro do cliente)
 Sempre que o cliente revelar algo útil de lembrar no próximo atendimento — preferências, restrições, contexto, problema relatado, combinação feita — adicione uma nota curta no array "observations".
