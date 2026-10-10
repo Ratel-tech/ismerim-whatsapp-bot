@@ -1,4 +1,5 @@
 import { formatPreco, isWithinHours, localDateString, normalizeName, resolveService, type Catalog } from './catalog.js';
+import { folgaNaData, weekdayOf, nomeDia } from './folga.js';
 import type { Profissional } from './profissionais.js';
 import type { Store, Booking } from './store.js';
 
@@ -102,6 +103,18 @@ export function validateAndCreateBooking(
     }
     professionalId = prof.id;
     resolvedProfessionalName = prof.nome;
+  }
+
+  if (professionalId != null) {
+    const prof = profissionais.find((p) => p.id === professionalId) ?? null;
+    const diaFolga = prof ? folgaNaData(prof, input.date) : null;
+    if (diaFolga != null && weekdayOf(input.date) === diaFolga) {
+      return {
+        ok: false,
+        code: 'professional_folga',
+        userMessage: `Nesse dia (${nomeDia(diaFolga)}) esse profissional folga. Posso agendar com outro que atende nesse dia?`,
+      };
+    }
   }
 
   const booking = store.addBooking({
@@ -238,6 +251,18 @@ export function validateAndRescheduleBooking(
     }
     professionalId = prof.id;
     professionalName = prof.nome;
+  }
+
+  const profFinal = profissionais.find((p) => p.id === (professionalId ?? original.professionalId));
+  if (profFinal) {
+    const diaFolga = folgaNaData(profFinal, input.date);
+    if (diaFolga != null && weekdayOf(input.date) === diaFolga) {
+      return {
+        ok: false,
+        code: 'professional_folga',
+        userMessage: `Nesse dia (${nomeDia(diaFolga)}) esse profissional folga. Posso remarcar com outro que atende nesse dia?`,
+      };
+    }
   }
 
   const booking = store.rescheduleBooking(original.id, {
