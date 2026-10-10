@@ -3,6 +3,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { log } from './log.js';
 import { normalizeTelefone, toPublicProfissional, type Profissional } from './profissionais.js';
+import { folgaEfetiva, semanaId } from './folga.js';
 import type { Vinculo } from './papeis.js';
 
 export interface StoredClient {
@@ -52,6 +53,14 @@ export interface ConversationSummary {
 /** Pendência de agendamento não confirmada expira após este período. */
 export const PENDING_BOOKING_TTL_MS = 24 * 60 * 60 * 1000;
 
+/** Estado do controle semanal de cobrança da folga de um profissional. */
+export interface FolgaControle {
+  semanaId: string;
+  askedAt: string | null;
+  remindedAt: string | null;
+  answeredAt: string | null;
+}
+
 export interface Booking {
   id: number;
   clientJid: string;
@@ -94,10 +103,11 @@ interface Db {
   profissionais: Profissional[];
   nextProfissionalId: number;
   vinculos: Record<string, Vinculo>;
+  folgaControle: Record<number, FolgaControle>;
 }
 
 function emptyDb(): Db {
-  return { clients: [], conversations: [], bookings: [], nextBookingId: 1, profissionais: [], nextProfissionalId: 1, vinculos: {} };
+  return { clients: [], conversations: [], bookings: [], nextBookingId: 1, profissionais: [], nextProfissionalId: 1, vinculos: {}, folgaControle: {} };
 }
 
 export class Store {
@@ -132,6 +142,7 @@ export class Store {
         if (!Array.isArray(parsed.profissionais)) parsed.profissionais = [];
         if (typeof parsed.nextProfissionalId !== 'number') parsed.nextProfissionalId = 1;
         if (!parsed.vinculos || typeof parsed.vinculos !== 'object' || Array.isArray(parsed.vinculos)) parsed.vinculos = {};
+        if (!parsed.folgaControle || typeof parsed.folgaControle !== 'object' || Array.isArray(parsed.folgaControle)) parsed.folgaControle = {};
         // Migração: booking legado sem status é tratado como confirmado (ocupa a vaga).
         for (const b of parsed.bookings) {
           if (b.status !== 'confirmado' && b.status !== 'cancelado' && b.status !== 'feito') b.status = 'confirmado';
@@ -303,8 +314,9 @@ export class Store {
    * Use para painel/agente/front. O número fica acessível apenas via
    * getProfissional()/listProfissionais() para uso interno (notificação).
    */
-  listProfissionaisPublic(): ReturnType<typeof toPublicProfissional>[] {
-    return this.db.profissionais.map(toPublicProfissional);
+  listProfissionaisPublic(now: Date = new Date()): ReturnType<typeof toPublicProfissional>[] {
+    const week = semanaId(now);
+    return this.db.profissionais.map((p) => ({ ...toPublicProfissional(p), folgaSemanaDia: folgaEfetiva(p, week) }));
   }
 
   getProfissional(id: number): Profissional | null {
@@ -351,6 +363,26 @@ export class Store {
     if (patch.ativo !== undefined) prof.ativo = patch.ativo;
     this.write();
     return prof;
+  }
+
+  /** Define a folga (recorrente e/ou da semana) do profissional. */
+  setFolga(id: number, patch: { folgaDia?: number | null; folgaSemana?: { semanaId: string; dia: number | null } | null }): Profissional | null {
+    const p = this.db.profissionais.find((x) => x.id === id);
+    if (!p) return null;
+    if (patch.folgaDia !== undefined) p.folgaDia = patch.folgaDia;
+    if (patch.folgaSemana !== undefined) p.folgaSemana = patch.folgaSemana;
+    this.write();
+    return p;
+  }
+
+  getFolgaControle(id: number): FolgaControle | null {
+    return this.db.folgaControle[id] ?? null;
+  }
+
+  setFolgaControle(id: number, patch: Partial<FolgaControle>): void {
+    const atual = this.db.folgaControle[id] ?? { semanaId: '', askedAt: null, remindedAt: null, answeredAt: null };
+    this.db.folgaControle[id] = { ...atual, ...patch };
+    this.write();
   }
 
   // ---------- vínculos de papel (admin/profissional) ----------

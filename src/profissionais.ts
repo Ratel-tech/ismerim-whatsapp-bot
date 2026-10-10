@@ -24,6 +24,10 @@ export interface ProfissionalPublic {
   horarioFim: string;
   ativo: boolean;
   hasTelefone: boolean;
+  /** Preferência recorrente de folga (1=segunda ... 6=sábado). null = nunca definiu. */
+  folgaDia?: number | null;
+  /** Folga efetiva da semana corrente (preenchida por listProfissionaisPublic). */
+  folgaSemanaDia?: number | null;
 }
 
 export function normalizeTelefone(value: string | null | undefined): string {
@@ -38,5 +42,7 @@ export function toPublicProfissional(p: Profissional): ProfissionalPublic {
     horarioFim: p.horarioFim,
     ativo: p.ativo,
     hasTelefone: normalizeTelefone(p.telefone).length > 0,
+    folgaDia: p.folgaDia ?? null,
+    folgaSemanaDia: null,
   };
 }
