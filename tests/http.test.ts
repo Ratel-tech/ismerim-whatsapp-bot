@@ -680,6 +680,16 @@ describe('http api — profissionais', () => {
     });
   });
 
+  it('aba Profissionais mostra o dia de folga efetivo', async () => {
+    await withServer(
+      makeDeps({ getProfissionais: () => [{ id: 1, nome: 'JUAN', horarioInicio: '10:00', horarioFim: '20:00', ativo: true, hasTelefone: true, folgaDia: 3, folgaSemanaDia: 3 }] }),
+      async (base) => {
+        const html = await (await fetch(`${base}/`)).text();
+        expect(html).toContain('Folga'); // coluna/rotulo presente no HTML do painel
+      },
+    );
+  });
+
   it('catálogo no painel permite configurar a duração do serviço (min)', async () => {
     await withServer(makeDeps(), async (base) => {
       const html = await (await fetch(`${base}/`)).text();

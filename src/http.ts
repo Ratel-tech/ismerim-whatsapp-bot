@@ -380,7 +380,7 @@ const PAGE = `<!DOCTYPE html>
     <div class="card">
       <h3 style="margin-bottom:10px">👥 Profissionais (cadastro e notificação)</h3>
       <table>
-        <thead><tr><th>Nome</th><th>Horário</th><th>Status</th><th>Telefone</th><th style="width:210px">Ações</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Horário</th><th>Status</th><th>Telefone</th><th>Folga</th><th style="width:210px">Ações</th></tr></thead>
         <tbody id="prof-list"><tr><td class="sub">Carregando...</td></tr></tbody>
       </table>
     </div>
@@ -1266,6 +1266,12 @@ setInterval(refreshBroadcast, 5000);
 // ---------------- Profissionais (cadastro) ----------------
 let profs = [];
 let profEditId = null;
+const DIA_ABREV = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function profFolgaLabel(p) {
+  if (p.folgaSemanaDia != null) return DIA_ABREV[p.folgaSemanaDia];
+  if (p.folgaDia != null) return DIA_ABREV[p.folgaDia] + ' (recorrente)';
+  return '—';
+}
 function profRow(p) {
   const hours = (p.horarioInicio || '--') + ' às ' + (p.horarioFim || '--');
   const status = p.ativo ? '<span class="badge g">ativo</span>' : '<span class="badge h">inativo</span>';
@@ -1275,13 +1281,14 @@ function profRow(p) {
     '<td>' + esc(hours) + '</td>' +
     '<td>' + status + '</td>' +
     '<td>' + tel + '</td>' +
+    '<td>' + esc(profFolgaLabel(p)) + '</td>' +
     '<td><button class="btn-mini" data-prof-edit="' + p.id + '">✏️ Editar</button> ' +
     '<button class="btn-mini" data-prof-toggle="' + p.id + '">' + (p.ativo ? '⏸️ Desativar' : '▶️ Ativar') + '</button></td>' +
     '</tr>';
 }
 function renderProfList() {
   const tb = document.querySelector('#prof-list');
-  if (!profs.length) { tb.innerHTML = '<tr><td class="sub" colspan="5">Nenhum profissional cadastrado ainda.</td></tr>'; return; }
+  if (!profs.length) { tb.innerHTML = '<tr><td class="sub" colspan="6">Nenhum profissional cadastrado ainda.</td></tr>'; return; }
   tb.innerHTML = profs.map(profRow).join('');
 }
 function resetProfForm() {

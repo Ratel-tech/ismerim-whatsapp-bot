@@ -11,6 +11,10 @@ Historico de mudancas relevantes. Formato baseado em Keep a Changelog.
   - Modulo `src/atendimento.ts` reutiliza as validacoes de `bookings.ts` e dispara as notificacoes de **ADMIN** e **profissional** (mesmo comportamento do fluxo do cliente).
   - Formulario na ficha do cliente (Servico, Data, Hora, Profissional) com os botoes **Agendar** e **Remarcar**.
 - Documentacao em `docs/`: indice, funcionalidades, arquitetura, agendamento/atendimento humano, API do painel, configuracao, operacao, CI/CD e troubleshooting.
+- **Folga dos barbeiros:** cada barbeiro informa pelo WhatsApp o dia de folga da semana (ou "nao vou folgar"), com unicidade entre barbeiros ativos e cobranca diaria de quem nao responde:
+  - Rotina semanal configuravel (`FOLGA_ASK_ENABLED`, `FOLGA_ASK_WEEKDAY`, `FOLGA_ASK_HOUR`, `FOLGA_REMIND_HOUR`), com parser deterministico (sem IA) e comando a qualquer momento.
+  - Backend bloqueia agendamento/remarcacao com barbeiro de folga (`professional_folga`) e oferece cobertura; o agente informa o cliente.
+  - Aba **Profissionais** do painel exibe a folga efetiva (somente leitura; DTO publico sem telefone).
 
 ### Corrigido
 - **Rolagem independente no painel de conversas:** a grade `.inbox` nao definia `grid-template-rows`, entao o painel de detalhe crescia alem da altura do container e era cortado por `overflow:hidden`; a pagina rolava apenas alguns pixels e o formulario ficava inalcancavel. Agora `grid-template-rows: minmax(0,1fr)` e `min-height:0` limitam cada coluna, que rola por conta propria.

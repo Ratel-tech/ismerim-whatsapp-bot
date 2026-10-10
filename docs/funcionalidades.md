@@ -15,6 +15,15 @@
 - **Criar agendamento de cliente:** nome + telefone (pede sempre) + servico + data/hora. Para o barbeiro, o agendamento e sempre dele. Pode criar quantos quiser.
 - **Marcar como feito:** admin em qualquer; barbeiro so nos dele (somente passados).
 
+## Folga dos barbeiros
+
+- Cada barbeiro informa pelo **WhatsApp** o **dia da semana de folga** (ou que **nao vai folgar** naquela semana).
+- Todo **domingo** (loja fechada) a partir de `FOLGA_ASK_HOUR`, o bot pergunta aos barbeiros **ativos com telefone**; enquanto nao responderem, **cobra 1x por dia** (`FOLGA_REMIND_HOUR`) ate o proximo domingo.
+- O barbeiro pode **mudar a qualquer momento**; mensagens contendo "folga" sao interpretadas por um **parser deterministico** (sem IA).
+- **Unicidade:** dois barbeiros ativos nao podem efetivar o **mesmo dia** na mesma semana — se o dia estiver ocupado, o bot **lista os dias livres** (`1..6`). Domingo (`0`) nunca e folga valida.
+- **Bloqueio no agendamento:** o backend nao agenda/remarca com um barbeiro no dia de folga dele (`professional_folga`) e **oferece cobertura** (outro profissional que atende ou sem preferencia). Ver [agendamento-e-atendimento-humano.md](agendamento-e-atendimento-humano.md).
+- O agente **informa** o cliente quando relevante e a aba **Profissionais** do painel exibe a folga efetiva (**somente leitura**; edicao pelo WhatsApp).
+
 ## Atendimento humano (pausa)
 
 - Ao enviar uma mensagem pelo painel, o agente **pausa** naquela conversa.

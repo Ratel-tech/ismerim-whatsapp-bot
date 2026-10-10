@@ -62,6 +62,12 @@ PANEL_TOKEN=                   # opcional: senha do painel (se vazio, painel sem
 HUMAN_PAUSE_MINUTES=30         # agente pausa quando um atendente responde e retoma após X min (0 = nunca)
 REMINDER_MINUTES_BEFORE=120    # lembrete ao cliente N min antes do agendamento (0 = desliga)
 
+# Folga dos barbeiros (pergunta semanal)
+FOLGA_ASK_ENABLED=true         # liga/desliga a rotina semanal de folga
+FOLGA_ASK_WEEKDAY=0            # dia em que o bot pergunta a folga (0=domingo ... 6=sábado)
+FOLGA_ASK_HOUR=9               # hora a partir da qual a pergunta é enviada
+FOLGA_REMIND_HOUR=9            # hora da cobrança diária (barbeiro sem resposta)
+
 # Banco de dados (opcional; padrão ./data dentro do projeto)
 DATA_DIR=                      # ex.: C:/IsmerimBot/dados
 DATA_HOST_DIR=                 # (Docker) pasta do host montada em /app/data
@@ -107,6 +113,13 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 - **Ver agenda:** admin vê tudo; **barbeiro vê só os agendamentos dele do dia**.
 - **Criar agendamento de cliente:** nome + telefone (pede sempre) + serviço + data/hora. Para o barbeiro, o agendamento é **sempre dele** (só muda se ele informar outro profissional). Pode criar quantos quiser.
 - **Marcar como feito:** admin em qualquer; barbeiro só nos dele (somente passados).
+
+### Folga dos barbeiros
+- Cada barbeiro informa pelo **WhatsApp** o **dia da folga** da semana (ou "não vou folgar"), podendo mudar a qualquer momento.
+- Todo domingo a partir de `FOLGA_ASK_HOUR` o bot pergunta aos barbeiros ativos; sem resposta, **cobra 1x por dia** (`FOLGA_REMIND_HOUR`) até o próximo domingo.
+- **Unicidade:** dois barbeiros ativos não folgam no mesmo dia na semana (o bot lista os dias livres). Domingo não é folga válida.
+- O backend **bloqueia** agendamento/remarcação com barbeiro de folga (`professional_folga`) e **oferece cobertura**; o agente informa o cliente.
+- A aba **Profissionais** do painel exibe a folga efetiva (**somente leitura**).
 
 ### Lembretes e confirmação
 - **2h antes** (`REMINDER_MINUTES_BEFORE`), o cliente recebe um lembrete com **SIM / CANCELAR**.

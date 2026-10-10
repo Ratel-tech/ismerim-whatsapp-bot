@@ -11,8 +11,13 @@ Toda criacao/remarcacao passa por `src/bookings.ts` (via `createBookingFromAgent
 3. Horario no formato `HH:MM` e **dentro do expediente** do dia da semana.
 4. **Vaga livre** (`store.findBooking`).
 5. Profissional (opcional) resolvido por nome entre os **ativos**.
+6. Profissional (opcional) **nao esta de folga** no dia do agendamento (`professional_folga`). Ver [funcionalidades.md](funcionalidades.md#folga-dos-barbeiros).
 
 Falhas retornam uma `userMessage` amigavel. No painel, essa mensagem aparece embaixo do formulario; para o cliente, e a resposta enviada pelo agente.
+
+### Folga do profissional (`professional_folga`)
+
+Quando o profissional informado esta de folga efetiva no dia do agendamento, tanto `validateAndCreateBooking` quanto `validateAndRescheduleBooking` recusam com `code: 'professional_folga'`. A mensagem **oferece cobertura**: o agente lista os profissionais que atendem naquele dia e o cliente pode agendar com outro ou **sem preferencia** (nunca ha reatribuicao automatica). Sem profissional informado, a validacao e permitida normalmente.
 
 ## Caminho 1 — Agente de IA (cliente)
 

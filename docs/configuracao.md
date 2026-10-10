@@ -27,6 +27,10 @@ Copy-Item .env.example .env
 | `PANEL_TOKEN` | - | Senha do painel (vazio = sem senha) |
 | `HUMAN_PAUSE_MINUTES` | `30` | Minutos que o agente fica pausado apos atendente responder (0 = nunca retoma) |
 | `REMINDER_MINUTES_BEFORE` | `120` | Antecedencia do lembrete ao cliente (0 = desliga) |
+| `FOLGA_ASK_ENABLED` | `true` | Liga/desliga a rotina semanal de folga dos barbeiros |
+| `FOLGA_ASK_WEEKDAY` | `0` | Dia da semana em que o bot pergunta a folga (0=domingo ... 6=sabado) |
+| `FOLGA_ASK_HOUR` | `9` | Hora a partir da qual a pergunta da folga e enviada |
+| `FOLGA_REMIND_HOUR` | `9` | Hora da cobranca diaria (barbeiro que ainda nao respondeu) |
 
 `ADMIN_PHONE` e a IA podem ser salvos pela aba **Config** do painel (atualiza o `.env` e a memoria).
 
