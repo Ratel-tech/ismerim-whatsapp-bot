@@ -1,4 +1,4 @@
-import { buildFolgaQuestion, buildFolgaReminder, diasOcupados, diasRestantes, semanaDaFolga } from './folga.js';
+import { buildFolgaQuestion, diasOcupados, diasRestantes, semanaDaFolga } from './folga.js';
 import { log } from './log.js';
 import type { Store } from './store.js';
 
@@ -31,8 +31,10 @@ export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ 
   const askWeekday = deps.askWeekday ?? 0;
   const askHour = deps.askHour ?? 9;
   const remindHour = deps.remindHour ?? 9;
-  // Gatilho ativo: e domingo e ja passou da hora, OU ja passou do domingo (recupera se o bot ficou offline).
-  const gatilhoAtivo = today !== askWeekday || hour >= askHour;
+  // Pergunta a partir do dia configurado (padrao domingo) e SEMPRE de manha
+  // (hora >= askHour), inclusive na recuperacao de dias seguintes se o bot
+  // ficou offline — nunca de madrugada.
+  const gatilhoAtivo = today >= askWeekday && hour >= askHour;
   let perguntados = 0;
   let cobrados = 0;
 
@@ -59,10 +61,11 @@ export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ 
       continue;
     }
 
-    // Ja perguntado nesta semana: cobra 1x por dia enquanto nao responder.
+    // Ja perguntado nesta semana: reenvia a MESMA mensagem 1x por dia (de manha)
+    // enquanto o barbeiro nao responder.
     if (!controle?.answeredAt && hour >= remindHour && !mesmoDia(controle.remindedAt, now)) {
       const livres = diasRestantes(now).filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
-      const ok = await deps.send(jid, buildFolgaReminder(prof.nome, livres)).catch(() => false);
+      const ok = await deps.send(jid, buildFolgaQuestion(prof.nome, livres)).catch(() => false);
       if (ok) {
         deps.store.setFolgaControle(prof.id, { remindedAt: now.toISOString() });
         cobrados += 1;

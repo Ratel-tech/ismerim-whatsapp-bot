@@ -91,4 +91,25 @@ describe('folga scheduler', () => {
     expect(sent[0]).toContain('terça');
     expect(sent[0]).not.toContain('segunda');
   });
+
+  it('so pergunta de manha (nao de madrugada), inclusive na recuperacao', async () => {
+    const store = makeStore();
+    store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const deps = { store, send: async () => true, adminPhone: '', askWeekday: 0, askHour: 9, remindHour: 9 };
+    expect((await processFolgaSchedule({ ...deps, now: new Date('2026-10-11T08:00:00') })).perguntados).toBe(0); // domingo cedo
+    expect((await processFolgaSchedule({ ...deps, now: new Date('2026-10-12T08:00:00') })).perguntados).toBe(0); // segunda cedo
+    expect((await processFolgaSchedule({ ...deps, now: new Date('2026-10-12T09:30:00') })).perguntados).toBe(1); // segunda de manha
+  });
+
+  it('reenvia a mesma mensagem (com os dias livres) todo dia ate responder', async () => {
+    const store = makeStore();
+    store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const sent: string[] = [];
+    const deps = { store, send: async (_j: string, t: string) => { sent.push(t); return true; }, adminPhone: '', askWeekday: 0, askHour: 9, remindHour: 9 };
+    await processFolgaSchedule({ ...deps, now: new Date('2026-10-11T09:05:00') }); // domingo
+    await processFolgaSchedule({ ...deps, now: new Date('2026-10-12T09:05:00') }); // segunda
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toContain('Dias livres');
+    expect(sent[1]).toContain('segunda');
+  });
 });

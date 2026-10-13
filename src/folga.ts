@@ -111,11 +111,6 @@ export function buildFolgaQuestion(nome: string, diasLivres: number[]): string {
   ].join('\n');
 }
 
-export function buildFolgaReminder(nome: string, diasLivres: number[]): string {
-  const livres = diasLivres.length ? diasLivres.map(nomeDia).join(', ') : '(nenhum dia livre)';
-  return `${nome}, ainda falta definir sua folga desta semana. Dias livres: ${livres}. Responda o dia ou "não vou folgar".`;
-}
-
 export function buildFolgaConfirmation(dia: number | null): string {
   return dia == null
     ? 'Combinado! Esta semana você não folga. 👍'
