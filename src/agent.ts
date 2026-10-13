@@ -254,7 +254,7 @@ export class Agent {
     const pending = this.opts.store.getPendingBooking(jid);
     const papelResolvido = resolverPapel({
       jid,
-      phone,
+      phone: phone ?? this.opts.store.getClient(jid)?.phone ?? null,
       adminPhone: this.opts.adminPhone ?? '',
       profissionais: this.opts.store.listProfissionais(),
       vinculos: this.opts.store.listVinculos(),
@@ -431,9 +431,11 @@ export class Agent {
 
     const parsed = parseFolgaAnswer(text);
     if (parsed.tipo === 'invalido') {
-      // Só re-pergunta se o texto de fato menciona folga; caso contrário deixa o
-      // fluxo de operador (ex.: "ver agenda") seguir normalmente.
-      if (!pendente || !menciona) return null;
+      // Não entendeu a resposta. Se não há pergunta pendente, deixa o fluxo
+      // normal. Se há, reenvia a pergunta de folga — EXCETO quando o texto é
+      // claramente um comando de operador (ex.: "ver agenda"), que deve passar.
+      if (!pendente) return null;
+      if (/\bagenda\b|\bagendar\b|\bmarcar\b|\bfeito\b|\bclientes?\b/i.test(text)) return null;
       const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
       return buildFolgaQuestion(prof.nome, livres);
     }

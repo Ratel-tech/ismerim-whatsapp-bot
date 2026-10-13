@@ -91,4 +91,39 @@ describe('comando de folga do barbeiro', () => {
     expect(replies.join(' ')).not.toMatch(/folga/i);
     expect(changes).toHaveLength(0);
   });
+
+  it('reenvia a pergunta de folga quando pendente e a mensagem nao e entendida', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    let llmCalls = 0;
+    const agent = new Agent({
+      store,
+      complete: async () => {
+        llmCalls += 1;
+        return JSON.stringify({ intent: 'conversation', reply: 'x', observations: [], booking: { requested: false, confirmed: false, acao: 'criar', service: null, professional: null, date: null, time: null, client_name: null } });
+      },
+      sendText: async (_jid: string, text: string) => { replies.push(text); return true; },
+      adminPhone: '5521999999999',
+      debounceMs: 0,
+    } as never);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'que dia e hoje?', name: 'JUAN', phone: p.telefone });
+    expect(llmCalls).toBe(0);
+    expect(replies.join(' ')).toMatch(/folga|segunda|terça|quarta|quinta|sexta|sábado/i);
+  });
+
+  it('reconhece o barbeiro pelo telefone salvo quando a mensagem chega sem telefone', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const jid = '210711229816914@lid';
+    store.upsertClient(jid, 'Juan Cerqueira', p.telefone);
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    const agent = makeAgent(store, replies, []);
+    await agent.handleInboundMessage({ jid, text: 'quinta', name: 'Juan Cerqueira', phone: null });
+    expect(store.getProfissional(p.id)!.folgaDia).toBe(4);
+  });
 });
