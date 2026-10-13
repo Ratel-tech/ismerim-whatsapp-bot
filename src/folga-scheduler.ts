@@ -1,4 +1,4 @@
-import { DIAS_UTEIS, buildFolgaQuestion, buildFolgaReminder, diasOcupados, semanaDaFolga } from './folga.js';
+import { buildFolgaQuestion, buildFolgaReminder, diasOcupados, diasRestantes, semanaDaFolga } from './folga.js';
 import { log } from './log.js';
 import type { Store } from './store.js';
 
@@ -47,7 +47,7 @@ export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ 
     if (!doCiclo) {
       // Primeira vez nesta semana: pergunta (a partir do gatilho).
       if (!gatilhoAtivo) continue;
-      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
+      const livres = diasRestantes(now).filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
       const ok = await deps.send(jid, buildFolgaQuestion(prof.nome, livres)).catch(() => false);
       if (ok) {
         // remindedAt = agora: o lembrete só pode sair a partir do dia seguinte (guard !mesmoDia).
@@ -61,7 +61,7 @@ export async function processFolgaSchedule(deps: FolgaSchedulerDeps): Promise<{ 
 
     // Ja perguntado nesta semana: cobra 1x por dia enquanto nao responder.
     if (!controle?.answeredAt && hour >= remindHour && !mesmoDia(controle.remindedAt, now)) {
-      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
+      const livres = diasRestantes(now).filter((d) => !diasOcupados(deps.store.listProfissionais(), week, prof.id).has(d));
       const ok = await deps.send(jid, buildFolgaReminder(prof.nome, livres)).catch(() => false);
       if (ok) {
         deps.store.setFolgaControle(prof.id, { remindedAt: now.toISOString() });

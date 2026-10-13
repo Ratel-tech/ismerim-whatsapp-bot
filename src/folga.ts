@@ -9,6 +9,12 @@ export function nomeDia(dia: number): string {
   return DIA_NOMES[dia] ?? String(dia);
 }
 
+/** Dias uteis que ainda podem receber folga nesta semana (do dia de hoje em diante). Domingo = todos. */
+export function diasRestantes(now: Date = new Date()): number[] {
+  const hoje = now.getDay();
+  return DIAS_UTEIS.filter((d) => d >= hoje);
+}
+
 /** Identificador ISO da semana (ex.: 2026-W41) a partir de uma data local. */
 export function semanaId(date: Date): string {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));

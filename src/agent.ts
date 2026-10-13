@@ -3,7 +3,7 @@ import { loadCatalog, resolveService } from './catalog.js';
 import { loadAgentConfig } from './agent-config.js';
 import { buildOperatorPrompt, buildSystemPrompt } from './prompt.js';
 import { resolverPapel, type PapelResolvido } from './papeis.js';
-import { DIAS_UTEIS, buildFolgaConfirmation, buildFolgaQuestion, diasOcupados, nomeDia, parseFolgaAnswer, semanaDaFolga } from './folga.js';
+import { buildFolgaConfirmation, buildFolgaQuestion, diasOcupados, diasRestantes, nomeDia, parseFolgaAnswer, semanaDaFolga } from './folga.js';
 import type { Store, PendingBooking } from './store.js';
 import { log } from './log.js';
 
@@ -423,7 +423,11 @@ export class Agent {
     const store = this.opts.store;
     const prof = store.getProfissional(profissionalId);
     if (!prof) return null;
-    const week = semanaDaFolga(new Date());
+    const agora = new Date();
+    const week = semanaDaFolga(agora);
+    const validos = diasRestantes(agora);
+    const ocupados = diasOcupados(store.listProfissionais(), week, profissionalId);
+    const livres = validos.filter((d) => !ocupados.has(d));
     const controle = store.getFolgaControle(profissionalId);
     const pendente = controle?.semanaId === week && !controle.answeredAt;
     const menciona = /\bfolg/i.test(text) || /n[aã]o\s+(vou\s+)?folg/i.test(text);
@@ -432,9 +436,7 @@ export class Agent {
     // Enquanto pendente, responde dúvidas sobre o dia/data atual antes de
     // repetir a pergunta (o barbeiro costuma conferir o dia para responder).
     if (pendente && /\b(que|qual)\s+dia\b|\bdia\s+da\s+semana\b|\b(que|qual)\s+data\b|\bdata\s+de\s+hoje\b/i.test(text)) {
-      const hoje = new Date();
-      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
-      return `Hoje é ${nomeDia(hoje.getDay())}, ${hoje.toLocaleDateString('pt-BR')}.\n\n${buildFolgaQuestion(prof.nome, livres)}`;
+      return `Hoje é ${nomeDia(agora.getDay())}, ${agora.toLocaleDateString('pt-BR')}.\n\n${buildFolgaQuestion(prof.nome, livres)}`;
     }
 
     const parsed = parseFolgaAnswer(text);
@@ -444,7 +446,6 @@ export class Agent {
       // claramente um comando de operador (ex.: "ver agenda"), que deve passar.
       if (!pendente) return null;
       if (/\bagenda\b|\bagendar\b|\bmarcar\b|\bfeito\b|\bclientes?\b/i.test(text)) return null;
-      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
       return buildFolgaQuestion(prof.nome, livres);
     }
     if (parsed.tipo === 'sem_folga') {
@@ -453,9 +454,11 @@ export class Agent {
       this.opts.onFolgaChange?.({ profissionalId, nome: prof.nome, dia: null });
       return buildFolgaConfirmation(null);
     }
-    const ocupados = diasOcupados(store.listProfissionais(), week, profissionalId);
+    if (!validos.includes(parsed.dia)) {
+      const lista = livres.length ? livres.map(nomeDia).join(', ') : '(nenhum — responda "não vou folgar")';
+      return `Esse dia já passou nesta semana. Dias disponíveis: ${lista}. Qual você quer?`;
+    }
     if (ocupados.has(parsed.dia)) {
-      const livres = DIAS_UTEIS.filter((d) => !ocupados.has(d));
       const lista = livres.length ? livres.map(nomeDia).join(', ') : '(nenhum dia livre — responda "não vou folgar")';
       return `Esse dia já está com outro barbeiro. Livres: ${lista}. Qual você quer?`;
     }

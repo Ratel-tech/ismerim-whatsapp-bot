@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../src/store.js';
 import { Agent } from '../src/agent.js';
 
 const tmp: string[] = [];
-afterEach(() => { for (const f of tmp.splice(0)) fs.rmSync(f, { force: true }); });
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-12T12:00:00')); }); // segunda
+afterEach(() => { vi.useRealTimers(); for (const f of tmp.splice(0)) fs.rmSync(f, { force: true }); });
 function makeStore(): Store {
   const f = path.join(os.tmpdir(), `fcmd-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
   tmp.push(f);
@@ -150,5 +151,18 @@ describe('comando de folga do barbeiro', () => {
     expect(out).toMatch(/\d{2}\/\d{2}\/\d{4}/);
     expect(out).toMatch(/folga|segunda|terça|quarta|quinta|sexta|sábado/i);
     expect(store.getProfissional(p.id)!.folgaDia ?? null).toBeNull();
+  });
+
+  it('recusa dia que ja passou nesta semana', async () => {
+    vi.setSystemTime(new Date('2026-10-13T12:00:00')); // terca
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    const agent = makeAgent(store, replies, []);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'segunda', name: 'JUAN', phone: p.telefone });
+    expect(store.getProfissional(p.id)!.folgaDia ?? null).toBeNull();
+    expect(replies.join(' ')).toMatch(/passou|dispon/i);
   });
 });

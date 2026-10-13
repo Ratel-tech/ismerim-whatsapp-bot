@@ -76,4 +76,19 @@ describe('folga scheduler', () => {
     const r = await processFolgaSchedule({ store, send: async () => true, adminPhone: '', now: new Date('2026-10-11T09:05:00'), askWeekday: 0, askHour: 9, remindHour: 9 });
     expect(r.perguntados).toBe(0);
   });
+
+  it('nao oferece dias que ja passaram (pergunta na terca)', async () => {
+    const store = makeStore();
+    store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const sent: string[] = [];
+    await processFolgaSchedule({
+      store,
+      send: async (_j: string, t: string) => { sent.push(t); return true; },
+      adminPhone: '',
+      now: new Date('2026-10-13T09:05:00'), // terca
+      askWeekday: 0, askHour: 9, remindHour: 9,
+    });
+    expect(sent[0]).toContain('terça');
+    expect(sent[0]).not.toContain('segunda');
+  });
 });
