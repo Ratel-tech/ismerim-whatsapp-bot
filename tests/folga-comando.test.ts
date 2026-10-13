@@ -126,4 +126,29 @@ describe('comando de folga do barbeiro', () => {
     await agent.handleInboundMessage({ jid, text: 'quinta', name: 'Juan Cerqueira', phone: null });
     expect(store.getProfissional(p.id)!.folgaDia).toBe(4);
   });
+
+  it('responde a data quando o barbeiro pergunta o dia, e repete a folga', async () => {
+    const store = makeStore();
+    const p = store.addProfissional({ nome: 'JUAN', telefone: '5521988887777' });
+    const { semanaDaFolga } = await import('../src/folga.js');
+    store.setFolgaControle(p.id, { semanaId: semanaDaFolga(new Date()), askedAt: new Date().toISOString() });
+    const replies: string[] = [];
+    let llmCalls = 0;
+    const agent = new Agent({
+      store,
+      complete: async () => {
+        llmCalls += 1;
+        return JSON.stringify({ intent: 'conversation', reply: 'x', observations: [], booking: { requested: false, confirmed: false, acao: 'criar', service: null, professional: null, date: null, time: null, client_name: null } });
+      },
+      sendText: async (_jid: string, text: string) => { replies.push(text); return true; },
+      adminPhone: '5521999999999',
+      debounceMs: 0,
+    } as never);
+    await agent.handleInboundMessage({ jid: `${p.telefone}@s.whatsapp.net`, text: 'que dia é hoje?', name: 'JUAN', phone: p.telefone });
+    const out = replies.join(' ');
+    expect(llmCalls).toBe(0);
+    expect(out).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+    expect(out).toMatch(/folga|segunda|terça|quarta|quinta|sexta|sábado/i);
+    expect(store.getProfissional(p.id)!.folgaDia ?? null).toBeNull();
+  });
 });

@@ -429,6 +429,14 @@ export class Agent {
     const menciona = /\bfolg/i.test(text) || /n[aã]o\s+(vou\s+)?folg/i.test(text);
     if (!pendente && !menciona) return null;
 
+    // Enquanto pendente, responde dúvidas sobre o dia/data atual antes de
+    // repetir a pergunta (o barbeiro costuma conferir o dia para responder).
+    if (pendente && /\b(que|qual)\s+dia\b|\bdia\s+da\s+semana\b|\b(que|qual)\s+data\b|\bdata\s+de\s+hoje\b/i.test(text)) {
+      const hoje = new Date();
+      const livres = DIAS_UTEIS.filter((d) => !diasOcupados(store.listProfissionais(), week, profissionalId).has(d));
+      return `Hoje é ${nomeDia(hoje.getDay())}, ${hoje.toLocaleDateString('pt-BR')}.\n\n${buildFolgaQuestion(prof.nome, livres)}`;
+    }
+
     const parsed = parseFolgaAnswer(text);
     if (parsed.tipo === 'invalido') {
       // Não entendeu a resposta. Se não há pergunta pendente, deixa o fluxo
