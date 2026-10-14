@@ -108,6 +108,8 @@ export class WhatsAppClient {
   onMessage: ((msg: InboundMessage) => void) | null = null;
   /** Notifica mudanças de presença (ex.: "digitando...") de contatos individuais. */
   onPresence: ((jid: string, presence: WAPresence) => void) | null = null;
+  /** Mensagem enviada pelo próprio número (ex.: atendente pelo celular) — atividade humana. */
+  onOutgoing: ((msg: { jid: string; text: string }) => void) | null = null;
 
   private sock: WASocket | null = null;
   private qrRaw: string | null = null;
@@ -196,6 +198,19 @@ export class WhatsAppClient {
     } catch (err) {
       log('error', `Falha ao enviar mensagem: ${(err as Error).message}`);
       return false;
+    }
+  }
+
+  /** Mostra "digitando..." (presença composing) por `ms` antes de enviar a resposta. */
+  async sendTyping(jid: string, ms: number): Promise<void> {
+    const sock = this.sock;
+    if (!sock || !this.isConnected()) return;
+    try {
+      await sock.sendPresenceUpdate('composing', jid);
+      if (ms > 0) await new Promise((resolve) => setTimeout(resolve, ms));
+      await sock.sendPresenceUpdate('paused', jid);
+    } catch (err) {
+      log('warn', `Falha ao enviar presença "digitando" para ${jid}: ${(err as Error).message}`);
     }
   }
 
@@ -380,9 +395,17 @@ export class WhatsAppClient {
     if (event.type !== 'notify' && event.type !== 'append') return;
     for (const msg of event.messages) {
       const key = msg.key;
-      if (key.fromMe) continue;
       const jid = key.remoteJid;
       if (!jid || isGroupJid(jid)) continue;
+
+      if (key.fromMe) {
+        // Mensagem enviada pelo próprio número (ex.: atendente pelo celular):
+        // registra como atividade humana; o bot pausa e NÃO responde.
+        const text = extractText(msg);
+        if (text) this.onOutgoing?.({ jid: normalizeJid(jid), text });
+        continue;
+      }
+
       this.subscribePresence(normalizeJid(jid));
 
       const audio = audioFromMessage(msg);

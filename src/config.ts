@@ -65,7 +65,7 @@ export const config: AppConfig = {
   transcribeModel: process.env.TRANSCRIBE_MODEL ?? 'whisper-1',
   adminPhone: process.env.ADMIN_PHONE ?? '',
   panelToken: process.env.PANEL_TOKEN ?? '',
-  humanPauseMinutes: Number(process.env.HUMAN_PAUSE_MINUTES ?? 30),
+  humanPauseMinutes: Number(process.env.HUMAN_PAUSE_MINUTES ?? 10),
   reminderMinutesBefore: Number(process.env.REMINDER_MINUTES_BEFORE ?? 120),
   folgaAskEnabled: process.env.FOLGA_ASK_ENABLED !== 'false',
   folgaAskWeekday: Number(process.env.FOLGA_ASK_WEEKDAY ?? 0),

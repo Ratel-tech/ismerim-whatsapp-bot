@@ -46,7 +46,8 @@ const whatsapp = new WhatsAppClient();
 const broadcaster = new BroadcastManager((jid, text) => whatsapp.sendText(jid, text));
 const agent = new Agent({
   store,
-  sendText: (jid, text) => whatsapp.sendText(jid, text),
+    sendText: (jid, text) => whatsapp.sendText(jid, text),
+    sendTyping: (jid, ms) => whatsapp.sendTyping(jid, ms),
   onBookingConfirmed: async (input) => {
     const outcome = createBookingFromAgent(store, loadCatalog(), store.listProfissionais(), input);
     if (!outcome.ok) {
@@ -264,6 +265,14 @@ whatsapp.onMessage = (msg) => {
 
 whatsapp.onPresence = (jid, presence) => {
   agent.handlePresence(jid, presence);
+};
+
+// Atividade humana detectada: o atendente respondeu pelo próprio celular.
+// Registra no histórico e pausa a IA (retoma após HUMAN_PAUSE_MINUTES).
+whatsapp.onOutgoing = ({ jid, text }) => {
+  store.addMessage(jid, 'bot', text);
+  store.setHuman(jid, true);
+  log('info', `Atividade humana em ${jid}; agente pausado por ${config.humanPauseMinutes} min.`);
 };
 
 function bookingsStatus(jid: string, today: string): { hasFuture: boolean; hasPast: boolean; agendou: boolean } {

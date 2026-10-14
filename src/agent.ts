@@ -115,6 +115,10 @@ export interface AgentOptions {
   maxWaitMs?: number;
   /** Tempo (ms) para responder depois que o cliente para de digitar ("paused"). */
   graceMs?: number;
+  /** Mostra "digitando..." (presença composing) antes de enviar a resposta. */
+  sendTyping?(jid: string, ms: number): Promise<void>;
+  /** Tempo (ms) que o agente "digita" antes de enviar a resposta. Default: 10000. */
+  typingMs?: number;
 }
 
 /** Presença do contato no chat (subconjunto do WAPresence do Baileys). */
@@ -139,13 +143,15 @@ export class Agent {
   private readonly maxWaitMs: number;
   private readonly graceMs: number;
   private readonly humanPauseMs: number;
+  private readonly typingMs: number;
   private readonly buffers = new Map<string, PendingBuffer>();
 
   constructor(private readonly opts: AgentOptions) {
     this.debounceMs = opts.debounceMs ?? 2000;
     this.maxWaitMs = opts.maxWaitMs ?? 15000;
     this.graceMs = opts.graceMs ?? 1000;
-    this.humanPauseMs = opts.humanPauseMs ?? 30 * 60_000;
+    this.humanPauseMs = opts.humanPauseMs ?? 10 * 60_000;
+    this.typingMs = opts.typingMs ?? 10_000;
   }
 
   async handleInboundMessage(input: { jid: string; text: string; name: string | null; phone?: string | null }): Promise<void> {
@@ -284,7 +290,7 @@ export class Agent {
             profissionais: this.opts.store.listProfissionaisPublic(),
           });
 
-    const history = this.opts.store.getMessages(jid, 12);
+    const history = this.opts.store.getMessages(jid, 60);
     const messages = [
       { role: 'system' as const, content: system },
       ...history.map((m) =>
@@ -509,6 +515,8 @@ export class Agent {
   }
 
   private async reply(jid: string, text: string): Promise<void> {
+    // "Digitando..." antes de enviar (aparência humana). Best-effort.
+    if (this.opts.sendTyping) await this.opts.sendTyping(jid, this.typingMs).catch(() => undefined);
     this.opts.store.addMessage(jid, 'bot', text);
     const sent = await this.opts.sendText(jid, text);
     if (!sent) log('warn', `WhatsApp desconectado; resposta não enviada para ${jid}`);
