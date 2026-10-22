@@ -15,12 +15,16 @@ Historico de mudancas relevantes. Formato baseado em Keep a Changelog.
   - Rotina semanal configuravel (`FOLGA_ASK_ENABLED`, `FOLGA_ASK_WEEKDAY`, `FOLGA_ASK_HOUR`, `FOLGA_REMIND_HOUR`), com parser deterministico (sem IA) e comando a qualquer momento.
   - Backend bloqueia agendamento/remarcacao com barbeiro de folga (`professional_folga`) e oferece cobertura; o agente informa o cliente.
   - Aba **Profissionais** do painel exibe a folga efetiva (somente leitura; DTO publico sem telefone).
+- **Resposta com "digitando...":** o agente envia presenca composing por ~10s antes de cada resposta automatica (`sendTyping`/`typingMs`).
+- **Pausa por atividade humana:** mensagens `fromMe` (atendente pelo celular) e do painel pausam a IA; retoma apos `HUMAN_PAUSE_MINUTES` (padrao 10) usando o historico completo da conversa (ate 60 mensagens).
 
 ### Corrigido
 - **Rolagem independente no painel de conversas:** a grade `.inbox` nao definia `grid-template-rows`, entao o painel de detalhe crescia alem da altura do container e era cortado por `overflow:hidden`; a pagina rolava apenas alguns pixels e o formulario ficava inalcancavel. Agora `grid-template-rows: minmax(0,1fr)` e `min-height:0` limitam cada coluna, que rola por conta propria.
 
 ### Alterado
 - **Painel de conversas mais compacto:** filtros em **menu expansivel** (recolhido por padrao, com o filtro ativo indicado no botao), titulo e botoes na mesma linha, itens com avatar reduzido e badge inline. A lista passou a exibir mais conversas por tela.
+- **Tom do agente mais breve e objetivo** (um pouco frio): regra de tamanho proporcional ao cliente (mensagem curta = resposta curta) e menos emojis/entusiasmo.
+- `HUMAN_PAUSE_MINUTES` padrao 30 -> 10.
 
 ## Versoes anteriores
 

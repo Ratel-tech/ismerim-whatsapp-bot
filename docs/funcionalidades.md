@@ -26,8 +26,9 @@
 
 ## Atendimento humano (pausa)
 
-- Ao enviar uma mensagem pelo painel, o agente **pausa** naquela conversa.
-- Ele **retoma sozinho** quando o cliente volta a falar apos `HUMAN_PAUSE_MINUTES` (0 = nunca retoma) ou pelo botao "Voltar para o agente de IA".
+- O agente **pausa** naquela conversa quando o atendente responde **pelo painel** ou **pelo proprio celular da loja** (mensagens enviadas pelo nosso numero sao detectadas).
+- Ele **retoma sozinho** quando o cliente volta a falar apos `HUMAN_PAUSE_MINUTES` (padrao 10), usando o **historico completo da conversa** (ate 60 mensagens) como contexto, ou pelo botao "Voltar para o agente de IA".
+- Antes de cada resposta automatica, o agente mostra **"digitando..."** por ~10s.
 - **Novo:** com a IA pausada, o atendente pode **agendar e remarcar** o corte direto na **ficha do cliente** no painel (aba Conversas). Ver [agendamento-e-atendimento-humano.md](agendamento-e-atendimento-humano.md).
 
 ## Lembretes e confirmacao

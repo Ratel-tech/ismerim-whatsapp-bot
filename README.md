@@ -59,7 +59,7 @@ TRANSCRIBE_MODEL=whisper-1
 ADMIN_PHONE=5511999999999      # recebe notificações (agendamento, confirmação, cancelamento...)
 PANEL_TOKEN=                   # opcional: senha do painel (se vazio, painel sem senha)
 
-HUMAN_PAUSE_MINUTES=30         # agente pausa quando um atendente responde e retoma após X min (0 = nunca)
+HUMAN_PAUSE_MINUTES=10         # agente pausa quando um atendente responde (painel ou celular da loja) e retoma após X min (0 = nunca)
 REMINDER_MINUTES_BEFORE=120    # lembrete ao cliente N min antes do agendamento (0 = desliga)
 
 # Folga dos barbeiros (pergunta semanal)
@@ -106,6 +106,7 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 - Responde dúvidas, apresenta serviços/promoções (preço só quando perguntado).
 - **Agenda**, **cancela**, **remarca** e **confirma presença** — sempre validado no backend.
 - Entende **datas passadas** (marca como "JÁ PASSOU"; não trata como ativo).
+- Tom **objetivo, breve e um pouco frio**: espelha o tamanho da mensagem do cliente (mensagem curta → resposta curta).
 - Áudio: transcreve notas de voz (STT).
 
 ### Admin / Barbeiro (operador)
@@ -127,8 +128,9 @@ Editável no painel (aba **Catálogo**) ou no arquivo — o bot lê a cada mensa
 - Se **cancelar**, cai no fluxo de cancelamento (admin + barbeiro avisados).
 
 ### Atendimento humano (pausa)
-- Ao enviar uma mensagem pelo painel, o agente **pausa** naquela conversa.
-- Ele **retoma sozinho** quando o cliente voltar a falar após `HUMAN_PAUSE_MINUTES` (ou pelo botão "Voltar para o agente de IA").
+- O agente **pausa** naquela conversa quando o atendente responde **pelo painel** ou **pelo próprio celular da loja** (mensagens enviadas pelo nosso número são detectadas).
+- Ele **retoma sozinho** quando o cliente voltar a falar após `HUMAN_PAUSE_MINUTES` (padrão 10), usando o **histórico completo da conversa** (até 60 mensagens) como contexto — ou pelo botão "Voltar para o agente de IA".
+- Antes de cada resposta automática, o agente mostra **"digitando…"** por ~10s, para parecer humano.
 - Com a IA pausada, o atendente **agenda e remarca** o corte direto na **ficha do cliente** (aba Conversas): formulário com serviço/data/hora/profissional e botão **Remarcar** em cada agendamento ativo — com as mesmas validações e notificações (admin + profissional) do fluxo normal.
 
 ### Contatos

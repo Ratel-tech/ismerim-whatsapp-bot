@@ -60,8 +60,9 @@ Cliente (WhatsApp)
 
 ## Fluxo de atendimento humano
 
-- Ao enviar uma mensagem pelo painel, o agente e **pausado** naquela conversa (`store.setHuman(jid, true)`).
-- Ele **retoma sozinho** quando o cliente volta a falar apos `HUMAN_PAUSE_MINUTES` (0 = nunca retoma) ou pelo botao "Voltar para o agente de IA".
+- O agente e **pausado** (`store.setHuman(jid, true)`) quando o atendente responde pelo painel **ou** pelo proprio celular da loja (callback `onOutgoing`, mensagens `fromMe`).
+- Ele **retoma sozinho** quando o cliente volta a falar apos `HUMAN_PAUSE_MINUTES` (padrao 10), usando o historico completo como contexto, ou pelo botao "Voltar para o agente de IA".
+- Antes de responder, o agente envia presenca **composing** ("digitando...") por ~10s (`sendTyping`).
 - Durante a pausa, o atendente pode **agendar/remarcar** o corte pela ficha do cliente; esse caminho passa por `atendimento.ts` e usa as mesmas validacoes/notificacoes do agente. Ver [agendamento-e-atendimento-humano.md](agendamento-e-atendimento-humano.md).
 
 ## Persistencia

@@ -25,7 +25,7 @@ Copy-Item .env.example .env
 | `TRANSCRIBE_MODEL` | `whisper-1` | Modelo de transcricao |
 | `ADMIN_PHONE` | - | Numero que recebe notificacoes (digitos com DDI) |
 | `PANEL_TOKEN` | - | Senha do painel (vazio = sem senha) |
-| `HUMAN_PAUSE_MINUTES` | `30` | Minutos que o agente fica pausado apos atendente responder (0 = nunca retoma) |
+| `HUMAN_PAUSE_MINUTES` | `10` | Minutos que o agente fica pausado apos atividade humana (painel ou celular da loja); 0 = nunca retoma |
 | `REMINDER_MINUTES_BEFORE` | `120` | Antecedencia do lembrete ao cliente (0 = desliga) |
 | `FOLGA_ASK_ENABLED` | `true` | Liga/desliga a rotina semanal de folga dos barbeiros |
 | `FOLGA_ASK_WEEKDAY` | `0` | Dia da semana em que o bot pergunta a folga (0=domingo ... 6=sabado) |
